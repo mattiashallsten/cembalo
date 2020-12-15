@@ -1,0 +1,27 @@
+#+title: Cembalo
+A harpsichord in SuperCollider.
+
+* TODO keyOn and keyOff
+I'm trying to write methods that turn a key on or off. My goal is for SuperCollider to be awhare of when a key has been pressed, and stop SuperCollider from sending =keyOff= messages to early. Not leave hanging notes, for short.
+
+I more abstract terms I want to disable all upcoming =keyOff= messages when the key has in fact been turned off. I realize now that this probably needs to be done in the =playNote= and =playMIDINote= methods, /not/ in the =keyOn= and =keyOff= messages. This has to do with scheduling.
+
+I've sort of put myself in the corner by limiting the number of keys. But I really want it to sound realistic!
+
+* Roadmap
+- [X] Load buffers from samples directory
+- [X] Function for playing midi notes
+- [X] Function for playing notes, freq input
+- [X] Trim all the samples
+- [2/4] Setting different tunings
+  - [X] Pythagorean
+  - [X] Simple 5-limit
+  - [ ] Simple 7-limit
+  - [ ] Meantone
+  - [ ] Possibility to add custom tunings
+- [X] Setting different root notes for different tunings
+
+* Different root notes
+This was just a matter of "shifting" the array containing the rates x steps. Since the rates only specify us offsets from et12, what's really happening is just that these offsets get moved around. The amount that each note differs from et12 just switches. Pretty hard to grasp, but I think I get it.
+* Getting samples
+Samples are recorded from the Nord Stage2, MIDI NN 24-108. I then chop them up in Reaper, by splitting the "body" and the "release" of the sound. These are added in separate directories, but with the same name (=cembalo-<nn>.wav=).
