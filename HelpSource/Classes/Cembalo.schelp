@@ -1,0 +1,129 @@
+TITLE:: Cembalo
+summary:: Harpsichord implementation in SuperCollider
+categories:: Instruments
+related:: Classes/SomeRelatedClass, Reference/SomeRelatedStuff, etc.
+
+DESCRIPTION::
+
+CLASSMETHODS::
+
+METHOD:: new
+Create a new instance of Cembalo.
+
+ARGUMENT:: out
+The output bus.
+
+ARGUMENT:: tuning
+Which tuning (temperament) to use. As of now, the possible ones are et12, fivelimit, sevenlimit, meantone and pyth.
+
+ARGUMENT:: root
+The note number in the chromatic scale that will function as the root in the scale generation, i.e the 1/1 ratio.
+
+ARGUMENT:: amp
+The amplitude.
+
+returns:: A Cembalo.
+
+
+INSTANCEMETHODS::
+
+METHOD:: playChord
+Play a chord. If the method is called multiple times, notes won't repeat unless the user tells them to.
+
+ARGUMENT:: nn
+An array of notes.
+
+ARGUMENT:: repeat
+Whether or not to repeat notes - true of false.
+
+METHOD:: out
+Set the out value.
+
+METHOD:: keyOff
+Turn off a key.
+
+ARGUMENT:: key
+The key number.
+
+ARGUMENT:: pan
+The panning.
+
+ARGUMENT:: amp
+The amp.
+
+METHOD:: keyOn
+Turn of a key.
+
+ARGUMENT:: key
+The key number.
+
+ARGUMENT:: pan
+The panning.
+
+ARGUMENT:: amp
+The amplitude.
+
+ARGUMENT:: rate
+The rate of playback.
+
+METHOD:: amp
+Set the amp.
+
+ARGUMENT:: newAmp
+The new amplitude value.
+
+METHOD:: playNote
+Hepler method for playing a note (sort of like makenote in Pure Data).
+
+ARGUMENT:: freq
+The frequency.
+
+ARGUMENT:: dur
+The duration of the note.
+
+ARGUMENT:: strum
+The time between each note if an array is supplied.
+
+ARGUMENT:: randomStrum
+Whether or not to randomize the order of the notes when strumming.p
+
+ARGUMENT:: panDispersion
+A factor of randomization for the panning of the notes.
+
+METHOD:: repeatChord
+Repeat the current chord.
+
+METHOD:: tuning
+Set the tuning.
+
+ARGUMENT:: newTuning
+
+METHOD:: playMIDINote
+Hepler method for playing a MIDI note, which then gets adjusted according to the current tuning.
+
+ARGUMENT:: note
+
+ARGUMENT:: dur
+
+ARGUMENT:: strum
+The time between each note if an array is supplied.
+
+ARGUMENT:: randomStrum
+Whether or not to randomize the order of the notes when strumming.p
+
+ARGUMENT:: panDispersion
+A factor of randomization for the panning of the notes.
+
+ARGUMENT:: randTimeAm
+The amount of randomization for the times between the notes.
+
+METHOD:: root
+Set what note in the chromatic scale is the root for scale generation, i.e the 1/1 ratio.
+
+ARGUMENT:: newRoot
+
+EXAMPLES::
+
+code::
+(some example code)
+::
