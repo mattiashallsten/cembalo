@@ -1,27 +1,60 @@
 #+title: Cembalo
 A harpsichord in SuperCollider.
 
-* TODO keyOn and keyOff
+* Roadmap
+- [ ] Add support for different temperaments in the samples, defining what
+  offset to using in playback rate
+- [ ] Add =strum= argument to =aitake= method in =CembaloSho=
+- [ ] Revise meantone and pythagorean tunings: think more about what in fact is
+  the root note of that tuning in relation to where the wolf occurs
+- [ ] Implement custom event type
+- [ ] Add fade to all body samples
+- [X] Setting different tunings
+  - [X] Pythagorean
+  - [X] Simple 5-limit
+  - [X] Simple 7-limit
+  - [X] Meantone
+  - [X] Possibility to add custom tunings
+- [X] Add possibility to randomize release times when playing multiple notes at once
+  - [X] Add =.rrand= to the =.wait= value
+  - [X] Add boolean variable
+- [X] Add =outputMapping= variable
+  - [X] Check for lists in lists
+  - [X] Add outL and outR variables to stereo SynthDefs
+  - [X] Add helper method for setting up output mapping - if not list in list,
+    make it list in list
+- [X] Add =mixToMono= option, for mapping to different outputs
+  - [X] Create mono versions of both SynthDefs
+  - [X] Add if statements in setup
+- [X] Implement =playChord= method
+- [X] Maybe write a =CembaloKey= class
+- [X] Load buffers from samples directory
+- [X] Function for playing midi notes
+- [X] Function for playing notes, freq input
+- [X] Trim all the samples
+- [X] Setting different root notes for different tunings
+
+* TODO Support for velocity?
+Perhaps as a digital extension of the harpsichord, maybe it could be interesting
+to add a low-pass filter to enable velocity controll -- when hitting hard, the
+cutoff frequency is high. When hitting soft, it is low.
+
+* DONE keyOn and keyOff
 I'm trying to write methods that turn a key on or off. My goal is for SuperCollider to be awhare of when a key has been pressed, and stop SuperCollider from sending =keyOff= messages to early. Not leave hanging notes, for short.
 
 I more abstract terms I want to disable all upcoming =keyOff= messages when the key has in fact been turned off. I realize now that this probably needs to be done in the =playNote= and =playMIDINote= methods, /not/ in the =keyOn= and =keyOff= messages. This has to do with scheduling.
 
 I've sort of put myself in the corner by limiting the number of keys. But I really want it to sound realistic!
 
-* Roadmap
-- [X] Load buffers from samples directory
-- [X] Function for playing midi notes
-- [X] Function for playing notes, freq input
-- [X] Trim all the samples
-- [2/4] Setting different tunings
-  - [X] Pythagorean
-  - [X] Simple 5-limit
-  - [ ] Simple 7-limit
-  - [ ] Meantone
-  - [ ] Possibility to add custom tunings
-- [X] Setting different root notes for different tunings
+EDIT: I've solved it now. It is documented in the class definition, under =playMIDINote=. Like this:
 
-* Different root notes
+The `keysPressedIndex' and `localIndex' variables work like this: 
+
+The `keysPressedIndex' variable is an array, initialized to contain only zeros and have the same length as the number of buffers (the number of keys). Each time a key is played using the timed methods (.playMIDINote and .playNote), the value of this array at the index of the key is read and stored at `localIndex', in order to now what "event" is being played. The value is then increased by 1, so that the next "event" will have a new index. When it is time to turn off the note, it checks to see if we are in fact on the same event or if a new event has happened before the first one is finished. If a new event is happening, it doesn't bother with turning the note off.
+
+* DONE Change chord
+Like I did in the =MHSho= class, it would be cool to implmement a functionality where I can change a "current" chord. Say I play Cmaj -- if I then change to Cmaj7, only the B is added, and the other notes aren't repeated.
+* DONE Different root notes
 This was just a matter of "shifting" the array containing the rates x steps. Since the rates only specify us offsets from et12, what's really happening is just that these offsets get moved around. The amount that each note differs from et12 just switches. Pretty hard to grasp, but I think I get it.
-* Getting samples
+* DONE Getting samples
 Samples are recorded from the Nord Stage2, MIDI NN 24-108. I then chop them up in Reaper, by splitting the "body" and the "release" of the sound. These are added in separate directories, but with the same name (=cembalo-<nn>.wav=).
