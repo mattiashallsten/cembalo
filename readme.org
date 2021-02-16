@@ -1,7 +1,15 @@
 #+title: Cembalo
 A harpsichord in SuperCollider.
 
+* Installation
+Clone this repository into the SuperCollider extensions folder, found by running =Platform.userExtensionDir=.
+
+* Usage
+Documented in the included help file.
+
 * Roadmap
+- [ ] Change =root= variable to also accept symbols, i.e 'a', 'b', 'g' etc.
+- [ ] Change =playChord= method so that it is possible to input frequencies
 - [ ] Add support for different temperaments in the samples, defining what
   offset to using in playback rate
 - [ ] Add =strum= argument to =aitake= method in =CembaloSho=
