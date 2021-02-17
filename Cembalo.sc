@@ -64,6 +64,8 @@ Cembalo {
 			});
 
 			currentChord = Array.fill(keys.size, {0});
+
+			this.eventTypeSetup;
 		}
 	}
 
@@ -378,6 +380,25 @@ Cembalo {
 		};
 		
 		^newArray
+	}
+
+	// * Instance method: eventTypeSetup
+	eventTypeSetup {
+		Event.removeEventType(\cembalo);
+		Event.addEventType(\cembalo, {
+			if(~cembalo.notNil, {
+				~play = ~cembalo.playNote(
+					freq: ~freq.value,
+					dur: ~sustain.value,
+					strum: ~strum.value,
+					randomStrum: ~randomStrum,
+					randomRelease: ~randomRelease,
+					panDispersion: ~panDispersion
+				)
+			}, {
+				~play = "You have to supply an instace of Cembalo".postln
+			})
+		}, (randomStrum: false, randomRelease: 0, panDispersion: 0))
 	}
 
 	// * Instance method: tuningSetup
