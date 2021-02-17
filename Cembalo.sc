@@ -80,12 +80,26 @@ Cembalo {
 		if(rate == nil, {
 			rate = transposedRates[(key + midiNoteOffset) % 12];
 		});
-		if(key < keys.size, { keys[key].keyOn(rate * masterRate, amp, pan) });
+		if((key < keys.size) && (key >= 0), {
+			keys[key].keyOn(rate * masterRate, amp, pan)
+		});
 	}
 
 	// * Instance method: keyOff
 	keyOff {|key = 0, pan = 0, amp = 0.7|
-		if(key < keys.size, { keys[key].keyOff } );
+		if((key < keys.size) && (key >= 0), {
+			keys[key].keyOff
+		});
+	}
+
+	// * Instance method: noteOn
+	noteOn {|note = 60, pan = 0, amp = 0.7|
+		this.keyOn(note - midiNoteOffset, pan, amp)
+	}
+
+	// * Instance method: noteOff
+	noteOff {|note = 60, pan = 0, amp = 0.7|
+		this.keyOff(note - midiNoteOffset, pan, amp)
 	}
 
 	// * Instance method: bendKey
@@ -166,8 +180,6 @@ Cembalo {
 			var bufIndex = asMidi.ceil.asInteger - midiNoteOffset;
 			var rate = (asMidi - asMidi.ceil).midiratio;
 			var local_body;
-
-			bufIndex.postln;
 
 			fork {
 				// Documented in the method `playMIDINote'.
