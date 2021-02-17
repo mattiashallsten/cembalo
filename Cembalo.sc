@@ -17,7 +17,7 @@ Cembalo {
 	// * Instance method: initCembalo
 	initCembalo {
 		server = Server.local;
-		path = Platform.userExtensionDir ++ "/Cembalo/";
+		path = Platform.userExtensionDir ++ "/cembalo/";
 
 		acceptableTunings = ['et12', 'fivelimit', 'sevenlimit', 'pyth', 'mean'];
 		rates = 1!12;

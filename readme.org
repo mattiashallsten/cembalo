@@ -47,6 +47,34 @@ Perhaps as a digital extension of the harpsichord, maybe it could be interesting
 to add a low-pass filter to enable velocity controll -- when hitting hard, the
 cutoff frequency is high. When hitting soft, it is low.
 
+* TODO Event type
+In the SuperCollider documentation, under =Event/Event's play method=, it is described how to change the default play method.
+
+In the same document, under =Event.addEventType=, it is described how to create a custom event type.
+
+The way to do it is this:
+
+#+begin_src sclang
+(
+Event.addEventType(\cembalo, {
+	if(~cembalo.notNil, {
+		~play = ~cembalo.playNote(
+			freq: ~freq.value,
+			dur: ~sustain.value,
+			strum: ~strum.value,
+			randomStrum: ~randomStrum,
+			randomRelease: ~randomRelease,
+			panDispersion: ~panDispersion
+		)
+	}, {
+		~play = "You have to supply an instace of Cembalo".postln
+	})
+}, (randomStrum: false, randomRelease: 0, panDispersion: 0))
+)
+#+end_src
+
+What's happening here is that I'm overriding the default =~play= function, and having it call the =Cembalo.playNote= method.
+
 * DONE keyOn and keyOff
 I'm trying to write methods that turn a key on or off. My goal is for SuperCollider to be awhare of when a key has been pressed, and stop SuperCollider from sending =keyOff= messages to early. Not leave hanging notes, for short.
 
