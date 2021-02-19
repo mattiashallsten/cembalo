@@ -384,6 +384,7 @@ Cembalo {
 		this.tuningSetup(tuning)
 	}
 
+	// * Instance method: tuning_
 	tuning_{|newTuning|
 		tuning = newTuning;
 		this.tuningSetup(tuning);
@@ -432,109 +433,154 @@ Cembalo {
 					freq: ~freq.value,
 					dur: ~sustain.value,
 					strum: ~strum.value,
+					pan: ~pan,
 					randomStrum: ~randomStrum,
-					randomRelease: ~randomRelease,
-					panDispersion: ~panDispersion
-				)
+				);
 			}, {
 				~play = "You have to supply an instace of Cembalo".postln
 			})
-		}, (randomStrum: false, randomRelease: 0, panDispersion: 0))
+		}, (randomStrum: false))
+	}
+
+	// * Instance method: generateFifthBasedScale
+	generateFifthBasedScale {|fractionOfComma=0|
+		var scale = this.generateScale(
+			(3/2) / (((3/2).pow(4) / 5).pow(fractionOfComma))
+		);
+		^scale
+	}
+	
+	// * Instance method: generateScale
+	generateScale {|fifth=1.5|
+		var scale = [1];
+		var i = 0;
+		// first, scale goes up in fifths:
+
+		// index:   0 1 2 3 4 5  6  7
+		// name:    G D A E B F# C# G#
+		while( {i < 8}, {
+			var newRatio = scale[i] * fifth;
+			scale = scale.add(newRatio);
+			i = i + 1
+		} );
+
+		// the, scale goes down in fifths:
+
+		// index:  7 8  9
+		// name:   F Bb Eb
+		while( {i < 11}, {
+			if(i == 8, {
+				var newRatio = 1 / fifth;
+				scale = scale.add(newRatio);
+				i = i + 1
+			}, {
+				var newRatio = scale[i] / fifth;
+				scale = scale.add(scale[i] / fifth);
+				i = i + 1
+				
+			});
+		});
+		scale = scale.collect{|item|
+			while({ (item > 2) || (item < 1) }, {
+				if(item > 2, {
+					item = item / 2
+				}, {
+					item = item * 2
+				})
+			});
+			item
+		};
+		scale = scale.sort;
+		^scale
 	}
 
 	// * Instance method: tuningSetup
 	tuningSetup {|tuning|
-		if(this.arrayContains(acceptableTunings, tuning), {
-			rates = switch(tuning,
-				'et12', {1!12},
-				'fivelimit', {[
-					1,
-					(16/15) / 1.midiratio,
-					(9/8) / 2.midiratio,
-					(6/5) / 3.midiratio,
-					(5/4) / 4.midiratio,
-					(4/3) / 5.midiratio,
-					(45/32) / 6.midiratio,
-					(3/2) / 7.midiratio,
-					(8/5) / 8.midiratio,
-					(5/3) / 9.midiratio,
-					(9/5) / 10.midiratio,
-					(15/8) / 11.midiratio
-				]},
-				'sevenlimit', {[
-					1,
-					(16/15) / 1.midiratio,
-					(9/8) / 2.midiratio,
-					(7/6) / 3.midiratio,
-					(9/7) / 4.midiratio,
-					(4/3) / 5.midiratio,
-					(45/32) / 6.midiratio,
-					(3/2) / 7.midiratio,
-					(8/5) / 8.midiratio,
-					(5/3) / 9.midiratio,
-					(7/4) / 10.midiratio,
-					(15/8) / 11.midiratio
-				]},
-				'pyth', {[
-					1,					      // C
-					(256/243) / 1.midiratio,  // Db
-					(9/8) / 2.midiratio,	  // D
-					(32/27) / 3.midiratio,	  // Eb
-					(81/64) / 4.midiratio,	  // E
-					(4/3) / 5.midiratio,	  // F
-					(729/512) / 6.midiratio,  // F#
-					(3/2) / 7.midiratio,	  // G
-					(128/81) / 8.midiratio,	  // Ab
-					(27/16) / 9.midiratio,	  // A
-					(16/9) / 10.midiratio,	  // Bb
-					(243/128) / 11.midiratio  // B
-				]},
-				'mean', {[
-					1,					             // C
-					(8 / 5.pow(5/4)) / 1.midiratio,	 // C#
-					(5.pow(1/2) / 2) / 2.midiratio,	 // D
-					(4 / 5.pow(3/4)) / 3.midiratio,	 // Eb
-					(5/4) / 4.midiratio,			 // E
-					(2 / 5.pow(1/4)) / 5.midiratio,	 // F
-					(5.pow(6/4) / 8) / 6.midiratio,	 // F#
-					5.pow(1/4) / 7.midiratio,		 // G
-					8/5 / 8.midiratio,				 // Ab
-					(5.pow(3/4) / 2) / 9.midiratio,	 // A
-					(4 / 5.pow(1/2)) / 10.midiratio, // Bb
-					(5.pow(5/4) / 4) / 11.midiratio, // B
-					
-				]},
-				{1!12}
-			);
-		}, {
-			if(tuning.isArray, {
-				var len = tuning.size;
-				if(len < 12, {
-					var diff = 12 - len;
-					"not enough ratios: adding % 2".format(diff).postln;
-					diff.do{
-						tuning = tuning.add(2);
-					}
-				}, {
-					if(len > 12, {
-						var diff = len - 12;
-						"too many ratios! removing % ratios".format(diff).postln;
-						diff.do{|index|
-							tuning.removeAt(len - index - 1)
-						};
-					});
-				});
-
-				rates = tuning.collect{|item, index|
-					if(index == 0, {
-						1
-					}, {
-						item / index.midiratio
-					})
+		if(tuning.isArray, {
+			var len = tuning.size;
+			if(len < 12, {
+				var diff = 12 - len;
+				"not enough ratios: adding % 2".format(diff).postln;
+				diff.do{
+					tuning = tuning.add(2);
 				}
 			}, {
-				"Tuning % not valid".format(tuning).postln;
-			})
+				if(len > 12, {
+					var diff = len - 12;
+					"too many ratios! removing % ratios".format(diff).postln;
+					diff.do{|index|
+						tuning.removeAt(len - index - 1)
+					};
+				});
+			});
+
+			rates = tuning.collect{|item, index|
+				if(index == 0, {
+					1
+				}, {
+					item / index.midiratio
+				})
+			}
+		}, {
+			if(tuning.isSymbol, {
+				switch(tuning,
+					'et12', {rates = 1!12},
+					'mean', {
+						var scale = this.generateFifthBasedScale(1/4);
+						this.tuningSetup(scale);
+					},
+					'mean6', {
+						var scale = this.generateFifthBasedScale(1/6);
+						this.tuningSetup(scale);
+					},
+					'pyth', {
+						var scale = this.generateFifthBasedScale(0);
+						this.tuningSetup(scale)
+					},
+					'fivelimit', {
+						this.tuningSetup([
+							1,
+							16/15,
+							9/8,
+							6/5,
+							5/4,
+							4/3,
+							45/32,
+							3/2,
+							8/5,
+							5/3,
+							9/5,
+							15/8
+						])
+					},
+					'sevenlimit', {
+						this.tuningSetup([
+							1,
+							16/15,
+							9/8,
+							7/6,
+							9/7,
+							4/3,
+							45/32,
+							3/2,
+							8/5,
+							5/3,
+							7/4,
+							15/8
+						])
+					}, {
+						"Tuning % not found! Using default et12.\n".postf(tuning);
+						rates = 1!12
+					}
+				)
+			}, {
+				if(tuning.isNumber, {
+					var scale = this.generateFifthBasedScale(tuning);
+					this.tuningSetup(scale);
+				}, {
+					"Tuning % not valid".format(tuning).postln;
+				})
+			});
 		});
 
 		transposedRates = rates.rotate(root % 12);
