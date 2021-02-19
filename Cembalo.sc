@@ -5,7 +5,7 @@ Cembalo {
 	var <keys;
 	var rates, transposedRates, acceptableTunings;
 	var <midiNoteOffset = 24, midiNoteCeil;
-	var keysPressedIndex;
+	var keyEventIndex;
 	var currentChord, chordOctave = 0;
 	var bodySynthdef, releaseSynthdef;
 
@@ -44,7 +44,7 @@ Cembalo {
 
 			midiNoteCeil = bodyBuffers.size - 1 + midiNoteOffset;
 
-			keysPressedIndex = Array.fill(bodyBuffers.size, {0});
+			keyEventIndex = Array.fill(bodyBuffers.size, {0});
 
 			keys = Array.fill(bodyBuffers.size, {|i|
 				var output = outputmapping[i%outputmapping.size];
@@ -79,6 +79,11 @@ Cembalo {
 
 	// * Instance method: keyOn
 	keyOn {|key = 0, pan = 0, amp = 0.7, rate|
+
+		// This is how to interact with the `keyOn' method within the
+		// `CembaloKey' class on the lowest abstraction level. The method
+		// `makeKeyEvet' interfaces with this method.
+		
 		if(rate == nil, {
 			rate = transposedRates[(key + midiNoteOffset) % 12];
 		});
@@ -109,99 +114,122 @@ Cembalo {
 		if(key < keys.size, { keys[key].bend(val) } );
 	}
 
-	// * Instance method: playMIDINote
-	playMIDINote {|note = 60, dur = 4, strum = 0, randomStrum = false, randomRelease = 0, panDispersion = 0, randTimeAm = 0|
-		note = note.asArray;
+	// * Instance method: makeKeyEvent
+	makeKeyEvent {|key = 0, dur = 4, delay = 0, pan = 0, rate|
 
-		if(randomStrum, {note = note.scramble});
-
-		note.do{|note, index|
-			var pan = ((panDispersion * 100).rand / 100) * [1,-1].choose;
-			var localDelay = strum * index * rrand(1 - randTimeAm, 1 + randTimeAm);
-			var local_body;
-			if(note < midiNoteOffset, {
-				"Can only play down to MIDI note %".format(midiNoteOffset).postln;
+		// One level of abstraction up from `keyOn'. The user supplies a key,
+		// a duration, a delay value, a pan value. If the key should be
+		// fine-tuned the user can also supply a rate value, if not the
+		// `keyOn' method adheres to the selected temperament.
+		
+		if(key < 0, {
+			"Too low index!".postln
+		}, {
+			if(key > keys.size, {
+				"Too high index!".postln
 			}, {
-				if(note > midiNoteCeil, {
-					"Can only play up to MIDI note %".format(midiNoteCeil).postln;
-				}, {
-					if(
-						(bodyBuffers[note - midiNoteOffset].notNil) &&
-						(releaseBuffers[note - midiNoteOffset].notNil), {
-							fork {
+				fork {
 
-								// The `keysPressedIndex' and `localIndex'
-								// variables work like this:
+					// By using an array of integers, I can keep track of if
+					// the current event for the key has been interrupted by a
+					// new event. Everytime this method is invoked, the value
+					// increases by one.
+					
+					var localIndex = keyEventIndex[key].copy;
+					keyEventIndex[key] = keyEventIndex[key] + 1;
 
-								// The `keysPressedIndex' variable is an array,
-								// initialized to contain only zeros and have
-								// the same length as the number of buffers (the
-								// number of keys). Each time a key is played
-								// using the timed methods (.playMIDINote and
-								// .playNote), the value of this array at the
-								// index of the key is read and stored at
-								// `localIndex', in order to now what "event" is
-								// being played. The value is then increased by
-								// 1, so that the next "event" will have a new
-								// index. When it is time to turn off the note,
-								// it checks to see if we are in fact on the
-								// same event or if a new event has happened
-								// before the first one is finished. If a new
-								// event is happening, it doesn't bother with
-								// turning the note off.
-								
-								var localIndex = keysPressedIndex[note - midiNoteOffset].copy;
-								keysPressedIndex[note - midiNoteOffset] = keysPressedIndex[note - midiNoteOffset] + 1;
+					wait(delay);
 
-								wait(localDelay);
-								
-								this.keyOn(note - midiNoteOffset, pan, amp);
+					// the `keyOn' method checks if the rate is set to
+					// nil. if it is, it will do all the necessary
+					// transpositions for the different temperaments.
+					this.keyOn(key, pan, rate:rate);
 
-								wait((dur - localDelay) * rrand(1 - randomRelease, 1 + randomRelease));
+					wait(dur - delay);
 
-								if(keysPressedIndex[note - midiNoteOffset] - 1 == localIndex, {
-									this.keyOff(note - midiNoteOffset, pan, amp);
-								}, {"key depressed again".postln});
-							}
+					if(keyEventIndex[key] - 1 == localIndex, {
+						this.keyOff(key)
 					})
-				})
-			});
+				}
+			})
+		})
+	}
+
+	// * Instance method: playMIDINote
+	playMIDINote {|note = 60, dur = 4, pan = 0, strum = 0, randomStrum = false|
+
+		// One level of abstraction up from `makeKeyEvent'. The user supplies
+		// a MIDI note (can be an array), a duration, a panning value (can be
+		// an array), a strum value (how much time there should be between
+		// multiple notes), and a randomStrum value (whether or not to shuffle
+		// the notes when strumming).
+		
+		var key = note.asArray.collect{|item|
+			item - midiNoteOffset
+		};
+
+		var delay = key.collect{|item, index|
+			index * strum
+		};
+
+		if(randomStrum, {delay = delay.scramble});
+
+		pan = pan.asArray;
+		dur = dur.asArray;
+
+		key.do{|item, index|
+			this.makeKeyEvent(
+				item,
+				dur[index % dur.size],
+				delay[index],
+				pan[index % pan.size]
+			)
 		}
 	}
 
 	// * Instance method: playNote
-	playNote {|freq = 440, dur = 4, strum = 0, randomStrum = false, randomRelease = 0, panDispersion = 0|
-		freq = freq.asArray;
+	playNote {|freq = 440, dur = 4, pan = 0, strum = 0, randomStrum = false|
 
-		if(randomStrum, {freq = freq.scramble});
+		// As with `playMIDINote': one level of abstraction higher than
+		// `makeKeyEvent'. Instead of a midi note number, the user here
+		// specifies a frequency in hertz.
 		
-		freq.do{|freq, index|
-			var pan = ((panDispersion * 100).rand / 100) * [1,-1].choose;
-			var localDelay = strum * index;
-			var asMidi = freq.cpsmidi;
-			var bufIndex = asMidi.ceil.asInteger - midiNoteOffset;
-			var rate = (asMidi - asMidi.ceil).midiratio;
-			var local_body;
+		var delay, key, rate;
 
-			fork {
-				// Documented in the method `playMIDINote'.
-				
-				var localIndex = keysPressedIndex[bufIndex].copy;
-				keysPressedIndex[bufIndex] = keysPressedIndex[bufIndex] + 1;
+		key = [];						// one array for the key index
+		rate = [];						// one array for rates
 
-				wait(localDelay);
+		freq.asArray.do{|item, index|
+			// convert the frequency value to midi (with decimals)
+			var asMIDI = item.cpsmidi;
+			// convert the midi value to integer, i.e actual midi note numbers
+			var midiNN = asMIDI.floor.asInteger;
+			// add the key index by subtracting the midi note offset
+			key = key.add(midiNN - midiNoteOffset);
+			// add the rate value by diffing the floored midi value with the
+			// original midi value, and then converting it to a ratio value
+			rate = rate.add((asMIDI - midiNN).midiratio)
+		};
+		
+		delay = key.collect{|item, index|
+			index * strum
+		};
 
-				this.keyOn(bufIndex, rate: rate, pan: pan, amp: amp);
+		if(randomStrum, {delay = delay.scramble});
 
-				wait((dur - localDelay) * rrand(1-randomRelease,1+randomRelease));
+		pan = pan.asArray;
+		dur = dur.asArray;
 
-				if(keysPressedIndex[bufIndex] - 1 == localIndex, {
-					this.keyOff(bufIndex, pan, amp);
-				});
-			}
+		key.do{|item, index|
+			this.makeKeyEvent(
+				item,
+				dur[index % dur.size],
+				delay[index],
+				pan[index % pan.size],
+				rate[index]
+			)
 		}
 	}
-
 	printChord {
 		var nn = [];
 		currentChord.do{|item, index|
@@ -229,7 +257,7 @@ Cembalo {
 	}
 	
 	// * Instance method: playChord
-	playChord {|nn, repeat=false|
+	playChord {|nn, repeat=false, strum=0|
 
 		// The user supplies an array of notes, and the Cembalo plays those
 		// notes. The Cembalo saves the notes as `currentChord', so it knows
@@ -242,11 +270,18 @@ Cembalo {
 		// automatically repeats that note. This might be changed in the future.
 		
 		var newChord;
-		nn = nn.asArray.collect{|item| item - midiNoteOffset};
+		var delay = 0;
+		nn = nn.asArray.collect{|item|
+			item - midiNoteOffset
+		};
 
 		newChord = 0!keys.size;
 		nn.do{|item|
-			newChord[item] = 1
+			if(
+				(item < newChord.size) &&
+				(item >= 0),
+				{ newChord[item] = 1; }
+			)
 		};
 
 		newChord.do{|item, index|
@@ -254,8 +289,14 @@ Cembalo {
 				if(
 					(currentChord[index] == 0) ||
 					(repeat) ||
-					(keys[index].player == nil), {
-						this.keyOn(index, rate: transposedRates[(nn + midiNoteOffset) % 12])
+					(keys[index].player == nil), { // here is the timeout feature
+						fork {
+							var localDelay = delay.copy;
+							delay = delay + strum;
+							wait(localDelay);
+							this.keyOn(index)
+
+						}
 					})
 			}, {
 				if(currentChord[index] == 1, {
