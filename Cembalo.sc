@@ -1,20 +1,30 @@
 Cembalo {
 	var <out, <tuning, <root, <amp, <masterRate, <outputmapping, <mixToMono;
+	var userSamplePath;
 	var server, path;
 	var <bodyBuffers, <releaseBuffers;
 	var <keys;
 	var rates, transposedRates, acceptableTunings;
-	var <midiNoteOffset = 24, midiNoteCeil;
+	var <midiNoteOffset = 24, <midiNoteCeil;
 	var keyEventIndex;
 	var currentChord, chordOctave = 0;
-	var bodySynthdef, releaseSynthdef;
+	var <bodySynthdef, <releaseSynthdef, <bodySynthdefMono, <releaseSynthdefMono;
 
-	// * Class method: new
-	*new {|out = 0, tuning = \et12, root = 0, amp = 0.7, masterRate = 1, outputmapping = 0, mixToMono = false|
-		^super.newCopyArgs(out, tuning, root, amp, masterRate, outputmapping, mixToMono).initCembalo;
+	// *** Class method: new
+	*new {|out = 0, tuning = \et12, root = 0, amp = 0.7, masterRate = 1, outputmapping = 0, mixToMono = false, userSamplePath = nil|
+		^super.newCopyArgs(
+			out,
+			tuning,
+			root,
+			amp,
+			masterRate,
+			outputmapping,
+			mixToMono,
+			userSamplePath
+		).initCembalo;
 	}
 
-	// * Instance method: initCembalo
+	// *** Instance method: initCembalo
 	initCembalo {
 		server = Server.local;
 		path = Platform.userExtensionDir ++ "/cembalo/";
@@ -25,14 +35,16 @@ Cembalo {
 		outputmapping = this.outputMappingSetup(outputmapping);
 
 		if(mixToMono, {
-			bodySynthdef = \cembalo_player_mono;
-			releaseSynthdef = \cembalo_player_oneshot_mono;
+			bodySynthdef = \cembalo_player_mix_to_mono;
+			releaseSynthdef = \cembalo_player_oneshot_mix_to_mono;
+			bodySynthdefMono = \cembalo_player_mono;
+			releaseSynthdefMono = \cembalo_player_oneshot_mono;
 		}, {
 			bodySynthdef = \cembalo_player;
 			releaseSynthdef = \cembalo_player_oneshot;
+			bodySynthdefMono = \cembalo_player_mono_to_stereo;
+			releaseSynthdefMono = \cembalo_player_oneshot_mono_to_stereo;
 		});
-
-		bodySynthdef.postln;
 		
 		this.tuningSetup(tuning);
 
@@ -42,25 +54,49 @@ Cembalo {
 
 			server.sync;
 
+			"hello wrold".postln;
+
+			//server.sync;
+			
 			midiNoteCeil = bodyBuffers.size - 1 + midiNoteOffset;
 
 			keyEventIndex = Array.fill(bodyBuffers.size, {0});
 
 			keys = Array.fill(bodyBuffers.size, {|i|
 				var output = outputmapping[i%outputmapping.size];
-				
-				CembaloKey(
-					nn: i + midiNoteOffset,
-					out: output[0],
-					outL: output[0],
-					outR: output[1],
-					amp: amp,
-					pan: 0,
-					bodyBuffer: bodyBuffers[i],
-					releaseBuffer: releaseBuffers[i],
-					bodySynthdef: bodySynthdef,
-					releaseSynthdef: releaseSynthdef
-				)
+				var key;
+				if(releaseBuffers.notNil, {
+					key = CembaloKey(
+						nn: i + midiNoteOffset,
+						out: output[0],
+						outL: output[0],
+						outR: output[1],
+						amp: amp,
+						pan: 0,
+						bodyBuffer: bodyBuffers[i],
+						releaseBuffer: releaseBuffers[i],
+						// bodySynthdef: bodySynthdef,
+						// releaseSynthdef: releaseSynthdef,
+						// bodySynthdefMono: bodySynthdefMono,
+						// releaseSynthdefMono: releaseSynthdefMono,
+						parent: this.value()
+					)
+				}, {
+					key = CembaloKey(
+						nn: i + midiNoteOffset,
+						out: output[0],
+						outL: output[0],
+						outR: output[1],
+						amp: amp,
+						pan: 0,
+						bodyBuffer: bodyBuffers[i],
+						releaseBuffer: nil,
+						// bodySynthdef: bodySynthdef,
+						// releaseSynthdef: releaseSynthdef,
+						parent: this.value()
+					)
+				});
+				key
 			});
 
 			currentChord = Array.fill(keys.size, {0});
@@ -77,8 +113,8 @@ Cembalo {
 		^midiNoteOffset
 	}
 
-	// * Instance method: keyOn
-	keyOn {|key = 0, pan = 0, amp = 0.7, rate|
+	// *** Instance method: keyOn
+	keyOn {|key = 0, pan = 0, amp = 0.7, rate, timbre=0|
 
 		// This is how to interact with the `keyOn' method within the
 		// `CembaloKey' class on the lowest abstraction level. The method
@@ -88,34 +124,34 @@ Cembalo {
 			rate = transposedRates[(key + midiNoteOffset) % 12];
 		});
 		if((key < keys.size) && (key >= 0), {
-			keys[key].keyOn(rate * masterRate, amp, pan)
+			keys[key].keyOn(rate * masterRate, amp, pan, timbre)
 		});
 	}
 
-	// * Instance method: keyOff
+	// *** Instance method: keyOff
 	keyOff {|key = 0, pan = 0, amp = 0.7|
 		if((key < keys.size) && (key >= 0), {
 			keys[key].keyOff
 		});
 	}
 
-	// * Instance method: noteOn
-	noteOn {|note = 60, pan = 0, amp = 0.7|
-		this.keyOn(note - midiNoteOffset, pan, amp)
+	// *** Instance method: noteOn
+	noteOn {|note = 60, pan = 0, amp = 0.7, timbre=0|
+		this.keyOn(note - midiNoteOffset, pan, amp, timbre: timbre)
 	}
 
-	// * Instance method: noteOff
+	// *** Instance method: noteOff
 	noteOff {|note = 60, pan = 0, amp = 0.7|
 		this.keyOff(note - midiNoteOffset, pan, amp)
 	}
 
-	// * Instance method: bendKey
+	// *** Instance method: bendKey
 	bendKey {|key = 0, val = 0|
 		if(key < keys.size, { keys[key].bend(val) } );
 	}
 
-	// * Instance method: makeKeyEvent
-	makeKeyEvent {|key = 0, dur = 4, delay = 0, pan = 0, rate|
+	// *** Instance method: makeKeyEvent
+	makeKeyEvent {|key = 0, dur = 4, delay = 0, pan = 0, rate, timbre=0|
 
 		// One level of abstraction up from `keyOn'. The user supplies a key,
 		// a duration, a delay value, a pan value. If the key should be
@@ -143,7 +179,7 @@ Cembalo {
 					// the `keyOn' method checks if the rate is set to
 					// nil. if it is, it will do all the necessary
 					// transpositions for the different temperaments.
-					this.keyOn(key, pan, rate:rate);
+					this.keyOn(key, pan, rate:rate, timbre: timbre);
 
 					wait(dur - delay);
 
@@ -155,8 +191,8 @@ Cembalo {
 		})
 	}
 
-	// * Instance method: playMIDINote
-	playMIDINote {|note = 60, dur = 4, pan = 0, strum = 0, randomStrum = false|
+	// *** Instance method: playMIDINote
+	playMIDINote {|note = 60, dur = 4, pan = 0, timbre = 0, strum = 0, randomStrum = false|
 
 		// One level of abstraction up from `makeKeyEvent'. The user supplies
 		// a MIDI note (can be an array), a duration, a panning value (can be
@@ -182,13 +218,14 @@ Cembalo {
 				item,
 				dur[index % dur.size],
 				delay[index],
-				pan[index % pan.size]
+				pan[index % pan.size],
+				timbre: timbre
 			)
 		}
 	}
 
-	// * Instance method: playNote
-	playNote {|freq = 440, dur = 4, pan = 0, strum = 0, randomStrum = false|
+	// *** Instance method: playNote
+	playNote {|freq = 440, dur = 4, pan = 0, timbre = 0, strum = 0, randomStrum = false|
 
 		// As with `playMIDINote': one level of abstraction higher than
 		// `makeKeyEvent'. Instead of a midi note number, the user here
@@ -203,7 +240,7 @@ Cembalo {
 			// convert the frequency value to midi (with decimals)
 			var asMIDI = item.cpsmidi;
 			// convert the midi value to integer, i.e actual midi note numbers
-			var midiNN = asMIDI.floor.asInteger;
+			var midiNN = asMIDI.floor.asInteger.clip(midiNoteOffset, midiNoteCeil);
 			// add the key index by subtracting the midi note offset
 			key = key.add(midiNN - midiNoteOffset);
 			// add the rate value by diffing the floored midi value with the
@@ -226,10 +263,12 @@ Cembalo {
 				dur[index % dur.size],
 				delay[index],
 				pan[index % pan.size],
-				rate[index]
+				rate[index],
+				timbre: timbre
 			)
 		}
 	}
+	// *** Instance method: printChord
 	printChord {
 		var nn = [];
 		currentChord.do{|item, index|
@@ -241,6 +280,7 @@ Cembalo {
 		"Current chord: %".format(nn).postln;
 	}
 
+	// *** Instance method: chordGate
 	chordGate {|gate|
 		if(gate == 1, {
 			var nn = [];
@@ -256,7 +296,7 @@ Cembalo {
 		})
 	}
 	
-	// * Instance method: playChord
+	// *** Instance method: playChord
 	playChord {|nn, repeat=false, strum=0|
 
 		// The user supplies an array of notes, and the Cembalo plays those
@@ -309,7 +349,7 @@ Cembalo {
 		this.printChord();
 	}
 
-	// * Instance method: repeatChord
+	// *** Instance method: repeatChord
 	repeatChord {|randomize = 0|
 
 		// Simply repeating the current chord.
@@ -328,7 +368,7 @@ Cembalo {
 		this.printChord();
 	}
 
-	// * Instance method: transformChord
+	// *** Instance method: transformChord
 	transformChord {|function|
 		if(function.isFunction, {
 			var nn = [];
@@ -344,7 +384,7 @@ Cembalo {
 		})
 	}
 
-	// * Instance method: addToChord
+	// *** Instance method: addToChord
 	addToChord {|nn, repeat = true|
 
 		// Add a note to the current playing chord. If it is already there, it
@@ -362,6 +402,7 @@ Cembalo {
 		this.printChord();
 	}
 
+	// *** Instance method: removeFromChord
 	removeFromChord {|nn|
 		nn = nn.asArray.collect{|item| item - midiNoteOffset };
 
@@ -373,32 +414,36 @@ Cembalo {
 		this.printChord();
 	}
 
+	// *** Instance method: allKeysOff
 	allKeysOff {
 		this.keys.do{|item, index|
 			this.keyOff(index)
 		}
 	}
-	
+
+	// *** Instance method: root_
 	root_{|newRoot|
 		root = newRoot % 12;
 		this.tuningSetup(tuning)
 	}
 
-	// * Instance method: tuning_
+	// *** Instance method: tuning_
 	tuning_{|newTuning|
 		tuning = newTuning;
 		this.tuningSetup(tuning);
 	}
 
+	// *** Instance method: amp_
 	amp_{|newAmp|
 		amp = newAmp;
 	}
 
+	// *** Instance method: masterRate_
 	masterRate_{|newMasterRate|
 		masterRate = newMasterRate
 	}
 
-	// * Instance method: outputMappingSetup
+	// *** Instance method: outputMappingSetup
 	outputMappingSetup {|array|
 		var newArray;
 		var detailed = array.isArray;
@@ -424,7 +469,7 @@ Cembalo {
 		^newArray
 	}
 
-	// * Instance method: eventTypeSetup
+	// *** Instance method: eventTypeSetup
 	eventTypeSetup {
 		Event.removeEventType(\cembalo);
 		Event.addEventType(\cembalo, {
@@ -434,26 +479,61 @@ Cembalo {
 					dur: ~sustain.value,
 					strum: ~strum.value,
 					pan: ~pan,
+					timbre: ~timbre,
 					randomStrum: ~randomStrum,
 				);
 			}, {
 				~play = "You have to supply an instace of Cembalo".postln
 			})
-		}, (randomStrum: false))
+		}, (randomStrum: false, timbre: 0))
 	}
 
-	// * Instance method: generateFifthBasedScale
+	// // * Instance method: printCOF
+	// printCOF {
+	// 	var noteNames = [
+	// 		"cb","gb","db","ab","eb","bb","f",
+	// 		"c",
+	// 		"g","d","a","e","b","f#","c#","g#","d#","a#","e#","b#"
+	// 	];
+
+	// 	var msg = "Circle of fifths: ";
+
+	// 	// append all notes going down the circle of fifths
+	// 	(3..1).do{|index|
+	// 		var noteIndex = ((root) + 7) - index;
+
+	// 		msg = msg ++ noteNames[noteIndex] ++ ", "
+	// 	};
+
+	// 	// append all notes going up the circle of fifths (including the root)
+	// 	9.do{|index|
+	// 		var noteIndex = ((root) + 7) + index;
+	// 		msg = msg ++ noteNames[noteIndex];
+
+	// 		if(index < 8, {
+	// 			msg = msg ++ ", "
+	// 		}, {
+	// 			msg = msg ++ "."
+	// 		});
+	// 	};
+
+	// 	msg.postln;
+	// }
+
+	// *** Instance method: generateFifthBasedScale
 	generateFifthBasedScale {|fractionOfComma=0|
-		var scale = this.generateScale(
-			(3/2) / (((3/2).pow(4) / 5).pow(fractionOfComma))
-		);
-		^scale
+		var comma = 81/80;
+
+		^this.generateScale(1.5 / comma.pow(fractionOfComma));
+		//(3/2) / (((3/2).pow(4) / 5).pow(fractionOfComma))
+		//^scale
 	}
 	
-	// * Instance method: generateScale
+	// *** Instance method: generateScale
 	generateScale {|fifth=1.5|
 		var scale = [1];
 		var i = 0;
+		
 		// first, scale goes up in fifths:
 
 		// index:   0 1 2 3 4 5  6  7
@@ -494,7 +574,7 @@ Cembalo {
 		^scale
 	}
 
-	// * Instance method: tuningSetup
+	// *** Instance method: tuningSetup
 	tuningSetup {|tuning|
 		if(tuning.isArray, {
 			var len = tuning.size;
@@ -559,11 +639,11 @@ Cembalo {
 							16/15,
 							9/8,
 							7/6,
-							9/7,
+							5/4,
 							4/3,
-							45/32,
+							7/5,
 							3/2,
-							8/5,
+							14/9,
 							5/3,
 							7/4,
 							15/8
@@ -586,7 +666,7 @@ Cembalo {
 		transposedRates = rates.rotate(root % 12);
 	}
 
-	// * Instance method: arrayContains
+	// *** Instance method: arrayContains
 	arrayContains {|array,value|
 		var contains = false;
 		array.asArray.do{|item|
@@ -596,9 +676,9 @@ Cembalo {
 		^contains
 	}
 
-	// * Instance method: loadSynthDefs
+	// *** Instance method: loadSynthDefs
 	loadSynthDefs {
-		// * SynthDef: cembalo_player
+		// *** SynthDef: cembalo_player
 		SynthDef(\cembalo_player, {
 			| buf = 0
 			, gate = 1
@@ -620,7 +700,7 @@ Cembalo {
 			Out.ar(outR, sig[1])
 		}).add;
 
-		// * SynthDef: cembalo_player_oneshot
+		// *** SynthDef: cembalo_player_oneshot
 		SynthDef(\cembalo_player_oneshot, {
 			| buf = 0
 			, outL = 0
@@ -638,8 +718,48 @@ Cembalo {
 			Out.ar(outR, sig[1]);
 		}).add;
 
-		// * SynthDef: cembalo_player_mono
-		SynthDef(\cembalo_player_mono, {
+		// *** SynthDef: cembalo_player_mono
+		SynthDef(\cembalo_player_mono_to_stereo, {
+			| buf = 0
+			, gate = 1
+			, outL = 0
+			, outR = 1
+			, rate = 1
+			, pan = 0
+			, amp = 1
+			|
+
+			var env = EnvGen.kr(Env.asr(0,1,0), gate, doneAction:2);
+			var sig = PlayBuf.ar(1, buf, rate.lag() * BufRateScale.kr(buf)) * env;
+
+			sig = Pan2.ar(sig, pan);
+
+			sig = sig * amp;
+
+			Out.ar(outL, sig[0]);
+			Out.ar(outR, sig[1])
+		}).add;
+
+		// *** SynthDef: cembalo_player_oneshot
+		SynthDef(\cembalo_player_oneshot_mono_to_stereo, {
+			| buf = 0
+			, outL = 0
+			, outR = 1
+			, rate = 1
+			, pan = 0
+			, amp 1
+			|
+
+			var sig = PlayBuf.ar(1, buf, rate, doneAction:2);
+			sig = Pan2.ar(sig, pan);
+			sig = sig * amp;
+
+			Out.ar(outL, sig[0]);
+			Out.ar(outR, sig[1]);
+		}).add;
+
+		// *** SynthDef: cembalo_player_mix_to_mono
+		SynthDef(\cembalo_player_mix_to_mono, {
 			| buf = 0
 			, gate = 1
 			, out = 0
@@ -659,8 +779,8 @@ Cembalo {
 			Out.ar(out, sig)
 		}).add;
 
-		// * SynthDef: cembalo_player_oneshot_mono
-		SynthDef(\cembalo_player_oneshot_mono, {
+		// *** SynthDef: cembalo_player_oneshot_mix_to_mono
+		SynthDef(\cembalo_player_oneshot_mix_to_mono, {
 			| buf = 0
 			, out = 0
 			, rate = 1
@@ -674,21 +794,80 @@ Cembalo {
 			sig = sig * amp;
 
 			Out.ar(out, sig)
-		}).add
+		}).add;
+
+		// *** SynthDef: cembalo_player_mono
+		SynthDef(\cembalo_player_mono, {
+			| buf = 0
+			, gate = 1
+			, out = 0
+			, rate = 1
+			, pan = 0
+			, amp = 1
+			|
+
+			var env = EnvGen.kr(Env.asr(0,1,0), gate, doneAction:2);
+			var sig = PlayBuf.ar(1, buf, rate.lag() * BufRateScale.kr(buf)) * env;
+
+			sig = sig * amp;
+
+			Out.ar(out, sig)
+		}).add;
+
+		// *** SynthDef: cembalo_player_oneshot_mono
+		SynthDef(\cembalo_player_oneshot_mono, {
+			| buf = 0
+			, out = 0
+			, rate = 1
+			, pan = 0
+			, amp 1
+			|
+
+			var sig = PlayBuf.ar(1, buf, rate, doneAction:2);
+			//sig = Balance2.ar(sig[0], sig[1], pan);
+			sig = sig * amp;
+
+			Out.ar(out, sig)
+		}).add;
+
+		
 	}
 
-	// * Instance method: loadBuffers
+	// *** Instance method: loadBuffers
 	loadBuffers {
-		var bodyPath = path ++ "samples/bod/*.wav";
-		var releasePath = path ++ "samples/rel/*.wav";
+		var bodyPath, releasePath;
 
-		bodyBuffers = bodyPath.pathMatch.collect{|filePath|
+		if(userSamplePath.notNil, {
+			"using supplied path %\n".postf(userSamplePath);
+			bodyPath = userSamplePath ++ "bod/*.wav";
+			releasePath = userSamplePath ++ "rel/*.wav";
+		}, {
+			bodyPath = path ++ "samples/bod/*.wav";
+			releasePath = path ++ "samples/rel/*.wav";
+		});
+
+		bodyBuffers = bodyPath.pathMatch.collect{|filePath, index|
+			if(index == 0, {
+				// finding the midi note number of the first sample
+				var num = filePath.findRegexp(".{3}(?=.wav)");
+				// using that to set the midi note offset (i.e the lowest midi
+				// note possible)
+				num.postln;
+				midiNoteOffset = num[0][1].compile.value();
+			});
 			Buffer.read(server, filePath)
 		};
 
 		releaseBuffers = releasePath.pathMatch.collect{|filePath|
 			Buffer.read(server, filePath)
 		};
+
+		server.sync;
+
+		"loaded samples".postln;
+		if(releaseBuffers.size == 0, {
+			releaseBuffers = nil
+		});
 	}
 }
 // Local Variables:

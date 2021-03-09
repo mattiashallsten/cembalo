@@ -7,7 +7,31 @@ Clone this repository into the SuperCollider extensions folder, found by running
 * Usage
 Documented in the included help file.
 
+* Regarding meantone (and other fifth-based tunings)
+The traditional way to generate a meantone temperament (or any temperament based on fifths, for that matters) is by starting from the note D. This takes us around the circle of fiths like this:
+
+| Number of fifths from center | Note |
+|                            5 | C#   |
+|                            4 | F#   |
+|                            3 | B    |
+|                            2 | E    |
+|                            1 | A    |
+|                            0 | D    |
+|                           -1 | G    |
+|                           -2 | C    |
+|                           -3 | F    |
+|                           -4 | Bb   |
+|                           -5 | Eb   |
+|                           -6 | Ab   |
+
+This is the way that these scales are generated in =Cembalo= -- even though the =root= variable is set to 0 (C). So, if the =root= variable is set to 2 (D), the "root" of the scale generation for these fifth-based tunings becomes E.
+
+However, where the "root" is in a fifth-based system is rather arbitrary -- it's just a matter of how many fifth up you wish to move and how many fifth down you wish to go.
+
 * Roadmap
+- [ ] Implement sustain pedal
+- [ ] Change the way samples are loaded -- always initialize a list of keys
+  (size 128), finding closest sample that is not =None=
 - [ ] Change =root= variable to also accept symbols, i.e 'a', 'b', 'g' etc.
 - [ ] Change =playChord= method so that it is possible to input frequencies
 - [ ] Add support for different temperaments in the samples, defining what
@@ -15,8 +39,14 @@ Documented in the included help file.
 - [ ] Add =strum= argument to =aitake= method in =CembaloSho=
 - [ ] Revise meantone and pythagorean tunings: think more about what in fact is
   the root note of that tuning in relation to where the wolf occurs
-- [ ] Implement custom event type
 - [ ] Add fade to all body samples
+- [X] Add support for user-supplied sample banks, checking if release samples
+  should be used or not.
+  - [X] Change naming conventions, use only numbers
+  - [X] Have the program look for release samples, and not use if not found.
+  - [X] Regex for finding last characters in file name, i.e note number
+  - [X] Argument for user path, check if set
+- [X] Implement custom event type
 - [X] Setting different tunings
   - [X] Pythagorean
   - [X] Simple 5-limit
@@ -42,12 +72,21 @@ Documented in the included help file.
 - [X] Trim all the samples
 - [X] Setting different root notes for different tunings
 
+* TODO Changing the way samples are loaded
+En idé är att ändra hur samplingar laddas. Som det ser ut nu så laddas alla samplingar i en lista, som alltså blir lika stor som antalet samplingar. Den håller inte koll på om några samplingar saknas, och det finns därför en risk för fel om en sampling anropas som inte finns -- om t.ex. midi nn 76 inte finns så tar den kanske midi nn 77.
+
+Det här är inte ett så värst stort problem kanske, men jag tror att det kan vara en idé att istället alltid låta listan med samplingar ha storleken 128, och på de platser där det inte finns några samplingar ligger =nil=. Då får användaren själv avgöra om den vill att programmet ska ta från andra samplingar (och ändra uppspelningshastigheten) eller inte.
+
+Som det ser ut nu så har jag en metod =.keyOn= som spelar den tangenten man anger -- i default-samplingarna är lägsta tonen nn 24 (lågt c) och om man anropar =.keyOn(0)= så är det den tonen som spelas. Det är löst med hjälp av hjälpmetoden =.noteOn=, som översätter midi nn till vilken tangent som ska spelas. När samplingarna laddas så ställs variabeln =midiNoteOffset= som håller koll på lägsta tonen i sample-banken, och =midiNoteCeil= som håller koll på högsta tonen.
+
+Jag tror att det nog är ganska mycket jobb för inte så mycket resultat, men jag tror att det kommer att vara bra i längden. Jag ska göra en genomgång av koden och göra en överblick över vilken arbete som skulle behöva göras.
+
 * TODO Support for velocity?
 Perhaps as a digital extension of the harpsichord, maybe it could be interesting
 to add a low-pass filter to enable velocity controll -- when hitting hard, the
 cutoff frequency is high. When hitting soft, it is low.
 
-* TODO Event type
+* DONE Event type
 In the SuperCollider documentation, under =Event/Event's play method=, it is described how to change the default play method.
 
 In the same document, under =Event.addEventType=, it is described how to create a custom event type.
@@ -74,6 +113,9 @@ Event.addEventType(\cembalo, {
 #+end_src
 
 What's happening here is that I'm overriding the default =~play= function, and having it call the =Cembalo.playNote= method.
+
+* DONE Support for =timbre= argument
+One idea is for the playback to support a =timbre= argument. The default would be 0, which means no change to the timbre. If the =timbre= is set to high, the class would select samples with a lower pitch and increase the playback rate to compensate, i.e adding more high frequency content. If the =timbre= is set to low, the class would select samples of a higher pitch and lower the playback rate to compensate, i.e lowering the amount of high frequency content.
 
 * DONE keyOn and keyOff
 I'm trying to write methods that turn a key on or off. My goal is for SuperCollider to be awhare of when a key has been pressed, and stop SuperCollider from sending =keyOff= messages to early. Not leave hanging notes, for short.
