@@ -1,9 +1,32 @@
 TITLE:: Cembalo
 summary:: Harpsichord implementation in SuperCollider
 categories:: Instruments
-related:: Classes/SomeRelatedClass, Reference/SomeRelatedStuff, etc.
 
 DESCRIPTION::
+
+A sampler made to play harpsichord samples. code::Cembalo:: supports key down and key up events, triggering different samples.
+
+It also supports the possibility to re-tune the instrument, either by specifying specific frequencies to play with the code::playNote:: method (which makes code::Cembalo:: pick the appropriate samples and re-tune them on the fly) or by using the code::tuning:: variable to choose a twelve-tone tuning. The code::tuning:: variable supports an array of ratios, a name of a number of pre-defined tunings, or a number, used as the fraction of a syntonic comma to generate a fifth-based tuning.
+
+Furthermore, code::Cembalo:: supports the possibility of mapping the different virtual keys to different outputs, either for use with multi-track recording or multi-channel speaker systems. By supplying an array of outputs (with the code::outputmapping:: variable), the keys will wrap around the supplied outputs and map out nicely on any number of outputs.
+
+section:: Patterns
+
+When loading an instance of code::Cembalo::, a new event type is also loaded: code::\cembalo::. This is a way to interface with the code::Cembalo:: instance via patterns, one of the strong-suits of SuperCollider. It works like this:
+
+code::
+// initialize an instance of Cembalo
+c = Cembalo();
+// play a pattern
+(
+p = Pbind(
+	\type, \cembalo,
+	\cembalo, c, // the user must supply an instance of Cembalo
+	\freq, Pwhite(100,600),
+	\dur, Pwhite(0.3,1.0)
+).play
+)
+::
 
 CLASSMETHODS::
 
@@ -21,6 +44,39 @@ The note number in the chromatic scale that will function as the root in the sca
 
 ARGUMENT:: amp
 The amplitude.
+
+ARGUMENT:: masterRate
+The master rate of playback, which can be used to de-tune the samples, for example for tuning to A = 432 rather that A = 440.
+
+ARGUMENT:: outputmapping
+An array to map the outputs of each key. Can either be a one-dimensional array (where each key gets one output) or a two-dimensional array (where each key is played back in stereo and gets two outputs). If the array is shorter than the number of keys, which it probably will be, the key index will wrap itself around the supplied array, like so:
+
+code::
+// output: 0 1  2 3  0 1 2  3 0
+// key:    C C# D Eb E F F# G G#
+::
+
+ARGUMENT:: mixToMono
+A boolean, specifying whether or not to use mono playback (default is stereo).
+
+ARGUMENT:: userSamplePath
+
+A directory containing user samples. Must end with a forward slash, i.e code::"path/to/samples/"::. The directory must have the following structure:
+
+code::
+bod/
+	body sample 1
+	body sample 2
+	...
+rel/
+	release sample 1
+	release sample 2
+	...
+::
+
+The samples must end with its MIDI note number represented by a three character string and the .wav, i.e code::"060.wav":: for middle C.
+
+If no release files are supplied, the program will not playback any sound upon releasing a key. For the tuning mechanics to work, the samples must be tuned to twelwe tone equal temperament (ET12). This might be changed in the future, and allow for samples in different tuning systems to be used.
 
 returns:: A Cembalo.
 
@@ -94,9 +150,15 @@ METHOD:: repeatChord
 Repeat the current chord.
 
 METHOD:: tuning
-Set the tuning.
+
+Set the tuning. If it is an array of ratios, use that as tuning. If it
+is a symbol, see if it matches one of the predefined tunings (et12, mean,
+mean6, pyth, sevenlimit, fivelimit). If it is a number, use that as the
+fraction of a comma to use as a base for a fifth-based temperament, i.e the
+"1/4" in quarter-comma meantone or the "1/6" in sixth-comma meantone.
 
 ARGUMENT:: newTuning
+
 
 METHOD:: playMIDINote
 Hepler method for playing a MIDI note, which then gets adjusted according to the current tuning.
@@ -122,8 +184,50 @@ Set what note in the chromatic scale is the root for scale generation, i.e the 1
 
 ARGUMENT:: newRoot
 
+private:: arrayContains
+private:: bodyBuffers
+private:: bodySynthdef
+private:: bodySynthdefMono
+private:: chordGate
+private:: eventTypeSetup
+private:: generateFifthBasedScale
+private:: generateScale
+private:: getMax
+private:: getMin
+private:: initCembalo
+private:: keys
+private:: loadBuffers
+private:: loadSynthDefs
+private:: makeKeyEvent
+private:: midiNoteCeil
+private:: midiNoteOffset
+private:: mixToMono
+private:: outputMappingSetup
+private:: outputmapping
+private:: printChord
+private:: releaseBuffers
+private:: releaseSynthdef
+private:: releaseSynthdefMono
+private:: tuningSetup
+
 EXAMPLES::
 
 code::
-(some example code)
+// more examples can be found in the "examples" directory
+
+c = Cembalo();
+
+c.playMIDINote([57,61,64]);
+
+c.playNote(220 * [1,5/4,3/2]);
+
+(
+Pbind(
+	\type, \cembalo,
+	\cembalo, c,
+	\freq, 200 * Prand([1,3/2,7/4],inf) * Prand([1,9/8,4/3],inf),
+	\timbre, -1.0,
+	\legato, 4
+).play
+)
 ::
