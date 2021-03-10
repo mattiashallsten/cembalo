@@ -1,8 +1,7 @@
 Cembalo {
 	var <out, <tuning, <root, <amp, <masterRate, <outputmapping, <mixToMono;
-	var userSamplePath;
+	var userSamplePath, fillLostSamples;
 	var server, path;
-	var <bodyBuffers, <releaseBuffers;
 	var <buffers;
 	var <keys;
 	var rates, transposedRates, acceptableTunings;
@@ -12,7 +11,18 @@ Cembalo {
 	var <bodySynthdef, <releaseSynthdef, <bodySynthdefMono, <releaseSynthdefMono;
 
 	// *** Class method: new
-	*new {|out = 0, tuning = \et12, root = 0, amp = 0.7, masterRate = 1, outputmapping = 0, mixToMono = false, userSamplePath = nil|
+	*new {
+		|out = 0
+		, tuning = \et12
+		, root = 0
+		, amp = 0.7
+		, masterRate = 1
+		, outputmapping = 0
+		, mixToMono = false
+		, userSamplePath = nil
+		, fillLostSamples = false
+		|
+		
 		^super.newCopyArgs(
 			out,
 			tuning,
@@ -21,7 +31,9 @@ Cembalo {
 			masterRate,
 			outputmapping,
 			mixToMono,
-			userSamplePath
+			userSamplePath,
+			fillLostSamples
+			
 		).initCembalo;
 	}
 
@@ -51,20 +63,16 @@ Cembalo {
 		
 		this.tuningSetup(tuning);
 
+		keys = nil!128;
+		keyEventIndex = 0!128;
+		currentChord = 0!128;
+
 		server.waitForBoot{
 			this.loadSynthDefs;
 			this.loadBuffers;
 
 			server.sync;
 			
-			midiNoteCeil = bodyBuffers.size - 1 + midiNoteOffset;
-
-			//keyEventIndex = Array.fill(bodyBuffers.size, {0});
-
-			keys = nil!128;
-			keyEventIndex = 0!128;
-			currentChord = 0!128;
-
 			buffers.do{|item|
 				var nn = item[\nn];
 
@@ -82,6 +90,29 @@ Cembalo {
 					parent: this.value()
 				)
 			};
+
+			if(fillLostSamples, {
+				(0..127).do{|nn|
+					if(keys[nn] == nil, {
+						var output = outputmapping[nn%outputmapping.size];
+						var sampleindex = this.findClosestSample(nn);
+
+						"creating new key with note number % using sample %\n".postf(nn, sampleindex);
+						
+						keys[nn] = CembaloKey(
+							nn: nn,
+							out: output[0],
+							outL: output[0],
+							outR: output[1],
+							amp: amp,
+							pan: 0,
+							bodyBuffer: buffers[sampleindex][\body],
+							releaseBuffer: buffers[sampleindex][\release],
+							parent: this.value()
+						);
+					})
+				}
+			});
 
 			this.eventTypeSetup;
 		}
@@ -290,6 +321,10 @@ Cembalo {
 		var delay = 0;
 		nn = nn.asArray.collect{|item| item.clip(0,127)};
 
+		// Although the user supplies an array of MIDI note numbers,
+		// the program converts that into a list of 128 values -- if
+		// the note is on, it's a 1 and if it's off, it's a 0.
+		
 		newChord = 0!128;
 		nn.do{|item|
 			if(keys[nn].notNil, {
@@ -396,6 +431,12 @@ Cembalo {
 
 	// *** Instance method: root_
 	root_{|newRoot|
+
+		// "root" in this case means a MIDI note number, i.e
+		// specifying what is considered to be 1/1 when generating a
+		// scale. It is /not/ the root frequency in hertz (i.e 440,
+		// 415 etc)
+		
 		root = newRoot % 12;
 		this.tuningSetup(tuning)
 	}
@@ -461,47 +502,13 @@ Cembalo {
 		}, (randomStrum: false, timbre: 0))
 	}
 
-	// // * Instance method: printCOF
-	// printCOF {
-	// 	var noteNames = [
-	// 		"cb","gb","db","ab","eb","bb","f",
-	// 		"c",
-	// 		"g","d","a","e","b","f#","c#","g#","d#","a#","e#","b#"
-	// 	];
-
-	// 	var msg = "Circle of fifths: ";
-
-	// 	// append all notes going down the circle of fifths
-	// 	(3..1).do{|index|
-	// 		var noteIndex = ((root) + 7) - index;
-
-	// 		msg = msg ++ noteNames[noteIndex] ++ ", "
-	// 	};
-
-	// 	// append all notes going up the circle of fifths (including the root)
-	// 	9.do{|index|
-	// 		var noteIndex = ((root) + 7) + index;
-	// 		msg = msg ++ noteNames[noteIndex];
-
-	// 		if(index < 8, {
-	// 			msg = msg ++ ", "
-	// 		}, {
-	// 			msg = msg ++ "."
-	// 		});
-	// 	};
-
-	// 	msg.postln;
-	// }
-
 	// *** Instance method: generateFifthBasedScale
 	generateFifthBasedScale {|fractionOfComma=0|
 		var comma = 81/80;
 
 		^this.generateScale(1.5 / comma.pow(fractionOfComma));
-		//(3/2) / (((3/2).pow(4) / 5).pow(fractionOfComma))
-		//^scale
 	}
-	
+
 	// *** Instance method: generateScale
 	generateScale {|fifth=1.5|
 		var scale = [1];
@@ -677,6 +684,28 @@ Cembalo {
 		});
 	}
 
+	// *** Instance method: findClosestSample
+	findClosestSample {|key = 60|
+		var i = 1;
+
+		if(buffers[key].notNil, {
+			^key
+		});
+
+		while({ (key - i >= 0) || (key + i < 128)}, {
+
+			if(buffers[key - i].notNil, {
+				^(key - i)
+			}, {
+				if(buffers[key + i].notNil, {
+					^(key + i)
+				}, {
+					i = i + 1
+				})
+			})
+		})
+	}
+	
 	// *** Instance method: loadSynthDefs
 	loadSynthDefs {
 		// *** SynthDef: cembalo_player
@@ -771,8 +800,7 @@ Cembalo {
 
 			var env = EnvGen.kr(Env.asr(0,1,0), gate, doneAction:2);
 			var sig = PlayBuf.ar(2, buf, rate.lag() * BufRateScale.kr(buf)) * env;
-
-			//sig = Balance2.ar(sig[0], sig[1], pan);
+			
 			sig = Mix(sig);
 
 			sig = sig * amp;
@@ -790,7 +818,7 @@ Cembalo {
 			|
 
 			var sig = PlayBuf.ar(2, buf, rate, doneAction:2);
-			//sig = Balance2.ar(sig[0], sig[1], pan);
+			
 			sig = Mix(sig);
 			sig = sig * amp;
 
@@ -825,13 +853,11 @@ Cembalo {
 			|
 
 			var sig = PlayBuf.ar(1, buf, rate, doneAction:2);
-			//sig = Balance2.ar(sig[0], sig[1], pan);
+			
 			sig = sig * amp;
 
 			Out.ar(out, sig)
 		}).add;
-
-		
 	}
 
 	// *** Instance method: loadBuffers
@@ -860,29 +886,6 @@ Cembalo {
 
 			buffers[num][\release] = buffer;
 		};
-
-		// bodyBuffers = bodyPath.pathMatch.collect{|filePath, index|
-		// 	if(index == 0, {
-		// 		// finding the midi note number of the first sample
-		// 		var num = filePath.findRegexp(".{3}(?=.wav)");
-		// 		// using that to set the midi note offset (i.e the lowest midi
-		// 		// note possible)
-		// 		num.postln;
-		// 		midiNoteOffset = num[0][1].compile.value();
-		// 	});
-		// 	Buffer.read(server, filePath)
-		// };
-
-		// releaseBuffers = releasePath.pathMatch.collect{|filePath|
-		// 	Buffer.read(server, filePath)
-		// };
-
-		// server.sync;
-
-		// "loaded samples".postln;
-		// if(releaseBuffers.size == 0, {
-		// 	releaseBuffers = nil
-		// });
 	}
 }
 // Local Variables:

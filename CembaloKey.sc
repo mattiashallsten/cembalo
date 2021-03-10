@@ -1,6 +1,7 @@
 CembaloKey {
-	var <nn, out, outL, outR, amp, pan, <bodyBuffer, <releaseBuffer, parent;
-	var <player, playerTimer, keyIsDepressed = false, rate = 1, bendAm = 0, timbre = 0, compRate = 1;
+	var <nn, out, outL, outR, amp, pan, <bodyBuffer, <releaseBuffer, sampleAdjust, parent;
+	var <player, playerTimer, keyIsDepressed = false, sustainPedal = false;
+	var rate = 1, bendAm = 0, timbre = 0, compRate = 1;
 	var bodyLength;
 
 	// * Class method: *new
@@ -13,10 +14,7 @@ CembaloKey {
 		, pan = 0
 		, bodyBuffer = 0
 		, releaseBuffer = 0
-		// , bodySynthdef = nil
-		// , releaseSynthdef = nil
-		// , bodySynthdefMono = nil
-		// , releaseSynthdefMono = nil
+		, sampleAdjust = 1
 		, parent = nil
 		|
 
@@ -29,8 +27,7 @@ CembaloKey {
 			pan,
 			bodyBuffer,
 			releaseBuffer,
-			// bodySynthdef,
-			// releaseSynthdef,
+			sampleAdjust,
 			parent
 		).initCembaloKey;		
 	}
@@ -58,7 +55,7 @@ CembaloKey {
 		});
 
 		// make adjustments in playback rate (set value of compRate)
-		this.applyTimbre;
+		this.adjustRate;
 		
 		
 		//		"turning on key %".format(nn).postln;
@@ -68,7 +65,7 @@ CembaloKey {
 				\out, out,
 				\outL, outL,
 				\outR, outR,
-				\rate, rate * bendAm.midiratio * compRate,
+				\rate, rate * bendAm.midiratio * compRate * sampleAdjust,
 				\pan, pan,
 				\amp, amp
 			]);
@@ -78,7 +75,7 @@ CembaloKey {
 				\out, out,
 				\outL, outL,
 				\outR, outR,
-				\rate, rate * bendAm.midiratio * compRate,
+				\rate, rate * bendAm.midiratio * compRate * sampleAdjust,
 				\pan, pan,
 				\amp, amp
 			]);
@@ -93,8 +90,6 @@ CembaloKey {
 	// * Instance method: keyOff
 	keyOff {
 		if(keyIsDepressed, {
-			//"turning off key %".format(nn).postln;
-
 			if(playerTimer.notNil, { playerTimer.stop } );
 			
 			if(player.notNil, {
@@ -109,7 +104,7 @@ CembaloKey {
 						\out, out,
 						\outL, outL,
 						\outR, outR,
-						\rate, rate * bendAm.midiratio * compRate,
+						\rate, rate * bendAm.midiratio * compRate * sampleAdjust,
 						\pan, pan,
 						\amp, amp
 					]);
@@ -119,21 +114,19 @@ CembaloKey {
 						\out, out,
 						\outL, outL,
 						\outR, outR,
-						\rate, rate * bendAm.midiratio * compRate,
+						\rate, rate * bendAm.midiratio * compRate * sampleAdjust,
 						\pan, pan,
 						\amp, amp
 					]);
 				});
 			});
-
-			keyIsDepressed = false
 		});
 
 		this.bend(0);
-	}
-
-	// * Instance method: applyTimbre
-	applyTimbre {
+	}	
+	
+	// * Instance method: adjustRate
+	adjustRate {
 		var sampleindex, adjusted_rate;
 		// remap timbre value to -32 <-> 32. `sampleindex' will be the
 		// sample to use for playback.
@@ -142,7 +135,7 @@ CembaloKey {
 		//sampleindex = (nn + sampleindex).clip(parent.midiNoteOffset, parent.midiNoteCeil);
 
 		// use the method `findClosestKey' to find the key to map to
-		sampleindex = parent.findClosestKey(nn + sampleindex);
+		sampleindex = parent.findClosestSample(nn + sampleindex);
 		// get ratio between new index and target pitch
 		adjusted_rate = (nn - sampleindex).midiratio;
 
@@ -159,7 +152,7 @@ CembaloKey {
 	bend {|val|
 		bendAm = val;
 		if(player.notNil, {
-			player.set(\rate, rate * bendAm.midiratio * compRate)
+			player.set(\rate, rate * bendAm.midiratio * compRate * sampleAdjust)
 		})
 	}
 
