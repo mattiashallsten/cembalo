@@ -135,20 +135,22 @@ CembaloKey {
 	// * Instance method: applyTimbre
 	applyTimbre {
 		var sampleindex, adjusted_rate;
-		// remap timbre value to -32 <-> 32
+		// remap timbre value to -32 <-> 32. `sampleindex' will be the
+		// sample to use for playback.
 		sampleindex = (timbre * (-32)).asInteger;
 		// add remapped value to nn -- get the sample to play
-		sampleindex = (nn + sampleindex).clip(parent.midiNoteOffset, parent.midiNoteCeil);
+		//sampleindex = (nn + sampleindex).clip(parent.midiNoteOffset, parent.midiNoteCeil);
+
+		// use the method `findClosestKey' to find the key to map to
+		sampleindex = parent.findClosestKey(nn + sampleindex);
 		// get ratio between new index and target pitch
 		adjusted_rate = (nn - sampleindex).midiratio;
-		
-		// subtract the midioffset of the Cembalo
-		sampleindex = sampleindex - parent.midiNoteOffset;
-		
-		bodyBuffer = parent.bodyBuffers[sampleindex];
+
+		// find a new buffer to use, at the index `sampleindex'.
+		bodyBuffer = parent.buffers[sampleindex][\body];
 
 		if(releaseBuffer.notNil,{
-			releaseBuffer = parent.releaseBuffers[sampleindex];
+			releaseBuffer = parent.buffers[sampleindex][\release];
 		});
 		
 		compRate = adjusted_rate;

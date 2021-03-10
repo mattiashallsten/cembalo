@@ -3,6 +3,7 @@ Cembalo {
 	var userSamplePath;
 	var server, path;
 	var <bodyBuffers, <releaseBuffers;
+	var <buffers;
 	var <keys;
 	var rates, transposedRates, acceptableTunings;
 	var <midiNoteOffset = 24, <midiNoteCeil;
@@ -34,6 +35,8 @@ Cembalo {
 
 		outputmapping = this.outputMappingSetup(outputmapping);
 
+		buffers = Dictionary();
+
 		if(mixToMono, {
 			bodySynthdef = \cembalo_player_mix_to_mono;
 			releaseSynthdef = \cembalo_player_oneshot_mix_to_mono;
@@ -53,53 +56,32 @@ Cembalo {
 			this.loadBuffers;
 
 			server.sync;
-
-			"hello wrold".postln;
-
-			//server.sync;
 			
 			midiNoteCeil = bodyBuffers.size - 1 + midiNoteOffset;
 
-			keyEventIndex = Array.fill(bodyBuffers.size, {0});
+			//keyEventIndex = Array.fill(bodyBuffers.size, {0});
 
-			keys = Array.fill(bodyBuffers.size, {|i|
-				var output = outputmapping[i%outputmapping.size];
-				var key;
-				if(releaseBuffers.notNil, {
-					key = CembaloKey(
-						nn: i + midiNoteOffset,
-						out: output[0],
-						outL: output[0],
-						outR: output[1],
-						amp: amp,
-						pan: 0,
-						bodyBuffer: bodyBuffers[i],
-						releaseBuffer: releaseBuffers[i],
-						// bodySynthdef: bodySynthdef,
-						// releaseSynthdef: releaseSynthdef,
-						// bodySynthdefMono: bodySynthdefMono,
-						// releaseSynthdefMono: releaseSynthdefMono,
-						parent: this.value()
-					)
-				}, {
-					key = CembaloKey(
-						nn: i + midiNoteOffset,
-						out: output[0],
-						outL: output[0],
-						outR: output[1],
-						amp: amp,
-						pan: 0,
-						bodyBuffer: bodyBuffers[i],
-						releaseBuffer: nil,
-						// bodySynthdef: bodySynthdef,
-						// releaseSynthdef: releaseSynthdef,
-						parent: this.value()
-					)
-				});
-				key
-			});
+			keys = nil!128;
+			keyEventIndex = 0!128;
+			currentChord = 0!128;
 
-			currentChord = Array.fill(keys.size, {0});
+			buffers.do{|item|
+				var nn = item[\nn];
+
+				var output = outputmapping[nn%outputmapping.size];
+
+				keys[nn] = CembaloKey(
+					nn: nn,
+					out: output[0],
+					outL: output[0],
+					outR: output[1],
+					amp: amp,
+					pan: 0,
+					bodyBuffer: item[\body],
+					releaseBuffer: item[\release],
+					parent: this.value()
+				)
+			};
 
 			this.eventTypeSetup;
 		}
@@ -114,81 +96,77 @@ Cembalo {
 	}
 
 	// *** Instance method: keyOn
-	keyOn {|key = 0, pan = 0, amp = 0.7, rate, timbre=0|
+	keyOn {|key = 60, pan = 0, amp = 0.7, rate, timbre=0|
 
 		// This is how to interact with the `keyOn' method within the
 		// `CembaloKey' class on the lowest abstraction level. The method
 		// `makeKeyEvet' interfaces with this method.
+
+		key = key.clip(0,127);
 		
 		if(rate == nil, {
-			rate = transposedRates[(key + midiNoteOffset) % 12];
+			rate = transposedRates[(key) % 12];
 		});
-		if((key < keys.size) && (key >= 0), {
+		if(keys[key].notNil, {
 			keys[key].keyOn(rate * masterRate, amp, pan, timbre)
+		}, {
+			"MIDI note number % not available in current sample bank!\n".postf(key);
 		});
 	}
 
 	// *** Instance method: keyOff
-	keyOff {|key = 0, pan = 0, amp = 0.7|
-		if((key < keys.size) && (key >= 0), {
+	keyOff {|key = 60, pan = 0, amp = 0.7|
+		key = key.clip(0,127);
+		if(keys[key].notNil, {
 			keys[key].keyOff
+		}, {
+			"MIDI note number % not available in current sample bank!\n".postf(key);
 		});
-	}
-
-	// *** Instance method: noteOn
-	noteOn {|note = 60, pan = 0, amp = 0.7, timbre=0|
-		this.keyOn(note - midiNoteOffset, pan, amp, timbre: timbre)
-	}
-
-	// *** Instance method: noteOff
-	noteOff {|note = 60, pan = 0, amp = 0.7|
-		this.keyOff(note - midiNoteOffset, pan, amp)
 	}
 
 	// *** Instance method: bendKey
 	bendKey {|key = 0, val = 0|
-		if(key < keys.size, { keys[key].bend(val) } );
+		key = key.clip(0,128);
+		if(keys[key].notNil, { keys[key].bend(val) } );
 	}
 
 	// *** Instance method: makeKeyEvent
-	makeKeyEvent {|key = 0, dur = 4, delay = 0, pan = 0, rate, timbre=0|
+	makeKeyEvent {|key = 60, dur = 4, delay = 0, pan = 0, rate, timbre=0|
 
 		// One level of abstraction up from `keyOn'. The user supplies a key,
 		// a duration, a delay value, a pan value. If the key should be
 		// fine-tuned the user can also supply a rate value, if not the
 		// `keyOn' method adheres to the selected temperament.
 		
-		if(key < 0, {
-			"Too low index!".postln
+		key = key.clip(0,128);
+		if(keys[key].notNil, {
+			fork {
+
+				// By using an array of integers, I can keep track of if
+				// the current event for the key has been interrupted by a
+				// new event. Everytime this method is invoked, the value
+				// increases by one.
+				
+				var localIndex = keyEventIndex[key].copy;
+				keyEventIndex[key] = keyEventIndex[key] + 1;
+
+				wait(delay);
+
+				// the `keyOn' method checks if the rate is set to
+				// nil. if it is, it will do all the necessary
+				// transpositions for the different temperaments.
+				this.keyOn(key, pan, rate:rate, timbre: timbre);
+
+				wait(dur - delay);
+
+				if(keyEventIndex[key] - 1 == localIndex, {
+					this.keyOff(key)
+				})
+			}
 		}, {
-			if(key > keys.size, {
-				"Too high index!".postln
-			}, {
-				fork {
-
-					// By using an array of integers, I can keep track of if
-					// the current event for the key has been interrupted by a
-					// new event. Everytime this method is invoked, the value
-					// increases by one.
-					
-					var localIndex = keyEventIndex[key].copy;
-					keyEventIndex[key] = keyEventIndex[key] + 1;
-
-					wait(delay);
-
-					// the `keyOn' method checks if the rate is set to
-					// nil. if it is, it will do all the necessary
-					// transpositions for the different temperaments.
-					this.keyOn(key, pan, rate:rate, timbre: timbre);
-
-					wait(dur - delay);
-
-					if(keyEventIndex[key] - 1 == localIndex, {
-						this.keyOff(key)
-					})
-				}
-			})
+			"MIDI note % not available!\n".postf(key);
 		})
+
 	}
 
 	// *** Instance method: playMIDINote
@@ -200,9 +178,7 @@ Cembalo {
 		// multiple notes), and a randomStrum value (whether or not to shuffle
 		// the notes when strumming).
 		
-		var key = note.asArray.collect{|item|
-			item - midiNoteOffset
-		};
+		var key = note.asArray;
 
 		var delay = key.collect{|item, index|
 			index * strum
@@ -240,11 +216,12 @@ Cembalo {
 			// convert the frequency value to midi (with decimals)
 			var asMIDI = item.cpsmidi;
 			// convert the midi value to integer, i.e actual midi note numbers
-			var midiNN = asMIDI.floor.asInteger.clip(midiNoteOffset, midiNoteCeil);
-			// add the key index by subtracting the midi note offset
-			key = key.add(midiNN - midiNoteOffset);
-			// add the rate value by diffing the floored midi value with the
-			// original midi value, and then converting it to a ratio value
+			var midiNN = asMIDI.floor.asInteger.clip(0,127);
+			// add the key index to the list of keys
+			key = key.add(midiNN);
+			// add the rate value by diffing the floored midi value
+			// with the midi value, and then converting it to a ratio
+			// value
 			rate = rate.add((asMIDI - midiNN).midiratio)
 		};
 		
@@ -273,7 +250,7 @@ Cembalo {
 		var nn = [];
 		currentChord.do{|item, index|
 			if(item == 1, {
-				nn = nn.add(index + midiNoteOffset)
+				nn = nn.add(index)
 			})
 		};
 		
@@ -311,17 +288,13 @@ Cembalo {
 		
 		var newChord;
 		var delay = 0;
-		nn = nn.asArray.collect{|item|
-			item - midiNoteOffset
-		};
+		nn = nn.asArray.collect{|item| item.clip(0,127)};
 
-		newChord = 0!keys.size;
+		newChord = 0!128;
 		nn.do{|item|
-			if(
-				(item < newChord.size) &&
-				(item >= 0),
-				{ newChord[item] = 1; }
-			)
+			if(keys[nn].notNil, {
+				newChord[item] = 1;
+			})
 		};
 
 		newChord.do{|item, index|
@@ -375,7 +348,7 @@ Cembalo {
 
 			currentChord.collect{|item, index|
 				if(item == 1, {
-					nn = nn.add(index + midiNoteOffset)
+					nn = nn.add(index)
 				})
 			};
 
@@ -390,12 +363,12 @@ Cembalo {
 		// Add a note to the current playing chord. If it is already there, it
 		// just repeats it.
 
-		nn = nn.asArray.collect{|item| item - midiNoteOffset };
+		nn = nn.asArray;
 
 		nn.do{|item|
 			if((currentChord[item] == 0) || (repeat == true), {
 				currentChord[item] = 1;
-				this.keyOn(item, rate: transposedRates[(nn + midiNoteOffset) % 12]);
+				this.keyOn(item);
 			})
 		};
 
@@ -404,7 +377,7 @@ Cembalo {
 
 	// *** Instance method: removeFromChord
 	removeFromChord {|nn|
-		nn = nn.asArray.collect{|item| item - midiNoteOffset };
+		nn = nn.asArray;
 
 		nn.do{|item|
 			currentChord[item] = 0;
@@ -676,6 +649,34 @@ Cembalo {
 		^contains
 	}
 
+	// *** Instance method: findClosestKey
+	findClosestKey {|key = 60|
+		// initialize an index
+		var i = 1;
+
+		// if the key does in fact exist, return it
+		if(keys[key].notNil, {
+			^key
+		});
+
+		// as long as either one of the indexes we're looking at are
+		// in the specified range, keep looking
+		while({ (key - i >= 0) || (key + i < 128)}, {
+			// if a key under the key supplied is not nil, return it
+			if(keys[key - i].notNil, {
+				^(key - i)
+			}, {
+				// same goes for a key over
+				if(keys[key + i].notNil, {
+					^(key + i)
+				}, {
+					// if not, search wider.
+					i = i + 1;
+				})
+			})
+		});
+	}
+
 	// *** Instance method: loadSynthDefs
 	loadSynthDefs {
 		// *** SynthDef: cembalo_player
@@ -846,28 +847,42 @@ Cembalo {
 			releasePath = path ++ "samples/rel/*.wav";
 		});
 
-		bodyBuffers = bodyPath.pathMatch.collect{|filePath, index|
-			if(index == 0, {
-				// finding the midi note number of the first sample
-				var num = filePath.findRegexp(".{3}(?=.wav)");
-				// using that to set the midi note offset (i.e the lowest midi
-				// note possible)
-				num.postln;
-				midiNoteOffset = num[0][1].compile.value();
-			});
-			Buffer.read(server, filePath)
+		bodyPath.pathMatch.do{|filePath|
+			var num = filePath.findRegexp(".{3}(?=.wav)")[0][1].compile.value();
+			var buffer = Buffer.read(server, filePath);
+
+			buffers[num] = Dictionary.newFrom([\nn, num, \body, buffer]);
 		};
 
-		releaseBuffers = releasePath.pathMatch.collect{|filePath|
-			Buffer.read(server, filePath)
+		releasePath.pathMatch.do{|filePath|
+			var num = filePath.findRegexp(".{3}(?=.wav)")[0][1].compile.value();
+			var buffer = Buffer.read(server, filePath);
+
+			buffers[num][\release] = buffer;
 		};
 
-		server.sync;
+		// bodyBuffers = bodyPath.pathMatch.collect{|filePath, index|
+		// 	if(index == 0, {
+		// 		// finding the midi note number of the first sample
+		// 		var num = filePath.findRegexp(".{3}(?=.wav)");
+		// 		// using that to set the midi note offset (i.e the lowest midi
+		// 		// note possible)
+		// 		num.postln;
+		// 		midiNoteOffset = num[0][1].compile.value();
+		// 	});
+		// 	Buffer.read(server, filePath)
+		// };
 
-		"loaded samples".postln;
-		if(releaseBuffers.size == 0, {
-			releaseBuffers = nil
-		});
+		// releaseBuffers = releasePath.pathMatch.collect{|filePath|
+		// 	Buffer.read(server, filePath)
+		// };
+
+		// server.sync;
+
+		// "loaded samples".postln;
+		// if(releaseBuffers.size == 0, {
+		// 	releaseBuffers = nil
+		// });
 	}
 }
 // Local Variables:

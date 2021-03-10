@@ -81,6 +81,31 @@ Som det ser ut nu så har jag en metod =.keyOn= som spelar den tangenten man ang
 
 Jag tror att det nog är ganska mycket jobb för inte så mycket resultat, men jag tror att det kommer att vara bra i längden. Jag ska göra en genomgång av koden och göra en överblick över vilken arbete som skulle behöva göras.
 
+** TODO newkeys
+- [X] Use 1 list for buffers instead of 2.
+- [X] Load buffers in dictionary, with =bodybuffer=, =releasebuffer= and =nn= attribute (maybe =offset= as well?)
+- [X] Store keys in a larger array. Load keys by iterating over the list of buffers.
+- [X] Access keys by supplying their note numbers, not the key number.
+- [X] Change =keyEventIndex= to work with the new system.
+- [-] Adjust all the methods for interaction
+  - [ ] =bendKey=
+  - [X] =makeKeyEvent=
+  - [X] =playMIDINote=
+  - [X] =playNote=
+  - [ ] =playChord=
+  - [X] =repeatChord=
+  - [X] =transformChord=
+  - [X] =addToChord=
+  - [X] =removeFromChord=
+  - [X] =tuningSetup=
+  - [X] =applyTimbre=
+- [ ] =CembaloKey= should accept =nil= as releaseBuffer input, and handle that itself.
+
+Kanske ska man låta stämningssetupen ske inuti =CembaloKey=-klassen?
+
+Jag tror att jag måste skriva en funktion som hittar närmast möjliga tangent. 
+
+
 * TODO Support for velocity?
 Perhaps as a digital extension of the harpsichord, maybe it could be interesting
 to add a low-pass filter to enable velocity controll -- when hitting hard, the
