@@ -7,6 +7,41 @@ Clone this repository into the SuperCollider extensions folder, found by running
 * Usage
 Documented in the included help file, but some examples are included in this readme. This class can be used as a virtual harpsichord using the included samples, but it can also be used with whatever samples you may have.
 
+* Providing your own samples
+You can provide your own samples to use with =Cembalo=. These must be put in a folder with a specific folder structure:
+
+#+begin_src text
+folder
+├── info.json
+├── bod
+│   ├── nn.wav
+│   ├── nn.wav
+│   ├── etc.
+└── rel
+    ├── nn.wav
+    ├── nn.wav
+    └── etc.
+#+end_src
+
+Where =nn= is the midi note number of the specific sample, expressed as *three* integers (i.e =060= for middle C). You have to supply samples in the =bod= directory -- this is the "body" of the sound. The samples in the =rel= directory is what's played when releasing a key, and they are not required.
+
+The file =info.json= is where all configuration is stored. If no configuration file is present, a default one will be used. The configuration file should use the following structure:
+
+#+begin_src js
+{
+    keys: {
+	<nn>: {
+	    "cent": <cent deviation>
+	},
+	<nn2>: {
+	    "cent": <cent deviation>
+	}
+    }
+}
+#+end_src
+
+So, if you know for example that you D above middle C is 4 cents flat, input that and =Cembalo= will compensate when playing back the sample.
+
 * Regarding meantone (and other fifth-based tunings)
 The traditional way to generate a meantone temperament (or any temperament based on fifths, for that matters) is by starting from the note D. This takes us around the circle of fiths like this:
 

@@ -1,10 +1,10 @@
 Cembalo {
 	var <out, <tuning, <root, <amp, <masterRate, <outputmapping, <mixToMono;
-	var userSamplePath, fillLostSamples;
+	var userSamplePath, fillLostSamples, attack, release;
 	var server, path;
-	var <buffers;
+	var <buffers, configurationPath, <configuration;
 	var <keys;
-	var rates, transposedRates, acceptableTunings;
+	var rates, transposedRates, acceptableTunings, tuningType;
 	var <midiNoteOffset = 24, <midiNoteCeil;
 	var keyEventIndex;
 	var currentChord, chordOctave = 0;
@@ -12,7 +12,7 @@ Cembalo {
 
 	// *** Class method: new
 	*new {
-		|out = 0
+		| out = 0
 		, tuning = \et12
 		, root = 0
 		, amp = 0.7
@@ -21,6 +21,8 @@ Cembalo {
 		, mixToMono = false
 		, userSamplePath = nil
 		, fillLostSamples = false
+		, attack = 0
+		, release = 0
 		|
 		
 		^super.newCopyArgs(
@@ -32,13 +34,18 @@ Cembalo {
 			outputmapping,
 			mixToMono,
 			userSamplePath,
-			fillLostSamples
+			fillLostSamples,
+			attack,
+			release
 			
 		).initCembalo;
 	}
 
 	// *** Instance method: initCembalo
 	initCembalo {
+		"            =============".postln;
+		"            == Cembalo ==".postln;
+		"            =============".postln;
 		server = Server.local;
 		path = Platform.userExtensionDir ++ "/cembalo/";
 
@@ -60,19 +67,40 @@ Cembalo {
 			bodySynthdefMono = \cembalo_player_mono_to_stereo;
 			releaseSynthdefMono = \cembalo_player_oneshot_mono_to_stereo;
 		});
-		
+
+		// Initialize scaleType variable -- will be set in tuningSetup
+		"Setting up tuning...".postln;
 		this.tuningSetup(tuning);
+		"Done.".postln;
 
 		keys = nil!128;
 		keyEventIndex = 0!128;
 		currentChord = 0!128;
 
+		"Loading configuration file...".postln;
+		this.loadConfiguration;
+		"Done.".postln;
+
 		server.waitForBoot{
+			"Server booted.".postln;
+			
+			"Loading synthdefs...".postln;
 			this.loadSynthDefs;
+			"Done".postln;
+			"Loading buffers...".postln;
 			this.loadBuffers;
+			"Done".postln;
 
 			server.sync;
-			
+
+			// Apply configuration to cent offsets
+			buffers.do{|item|
+				var num = item[\nn].asString;
+
+				item[\centOffset] = configuration["keys"][num]["cent"].asFloat;
+			};
+
+			"Loading keys...".postln;
 			buffers.do{|item|
 				var nn = item[\nn];
 
@@ -85,13 +113,20 @@ Cembalo {
 					outR: output[1],
 					amp: amp,
 					pan: 0,
+					attack: attack,
+					release: release,
 					bodyBuffer: item[\body],
 					releaseBuffer: item[\release],
 					parent: this.value()
 				)
 			};
 
+			server.sync;
+
+			"Done.".postln;
+
 			if(fillLostSamples, {
+				"Creating additional keys...".postln;
 				(0..127).do{|nn|
 					if(keys[nn] == nil, {
 						var output = outputmapping[nn%outputmapping.size];
@@ -106,15 +141,23 @@ Cembalo {
 							outR: output[1],
 							amp: amp,
 							pan: 0,
+							attack: attack,
+							release: release,
 							bodyBuffer: buffers[sampleindex][\body],
 							releaseBuffer: buffers[sampleindex][\release],
 							parent: this.value()
 						);
 					})
-				}
+				};
+				server.sync;
+				"Done".postln;
 			});
 
+			"Loading custom event type...".postln;
 			this.eventTypeSetup;
+			"Done.".postln;
+
+			"Cembalo loaded.".postln;
 		}
 	}
 
@@ -155,14 +198,43 @@ Cembalo {
 		});
 	}
 
+	// *** Instance method: sustainPedalOn
+	sustainPedalOn {
+		keys.do{|key| if(key.notNil, { key.sustainPedalOn() } ) };
+	}
+
+	// *** Instance method: sustainPedalOff
+	sustainPedalOff {
+		keys.do{|key| if(key.notNil, { key.sustainPedalOff() } ) };
+	}
+
+
 	// *** Instance method: bendKey
 	bendKey {|key = 0, val = 0|
 		key = key.clip(0,128);
 		if(keys[key].notNil, { keys[key].bend(val) } );
 	}
 
+	// *** Instance method: bendAllKeys
+	bendAllKeys {|val = 0|
+		keys.do{|item|
+			if(item.notNil, {
+				item.bend(val)
+			})
+		}
+	}
+
 	// *** Instance method: makeKeyEvent
-	makeKeyEvent {|key = 60, dur = 4, delay = 0, pan = 0, rate, timbre=0|
+	makeKeyEvent {|
+		key = 60
+		, dur = 4
+		, delay = 0
+		, pan = 0
+		, rate
+		, timbre = 0
+		, bendDelay = 1
+		, bendAm = 1
+		|
 
 		// One level of abstraction up from `keyOn'. The user supplies a key,
 		// a duration, a delay value, a pan value. If the key should be
@@ -179,6 +251,8 @@ Cembalo {
 				// increases by one.
 				
 				var localIndex = keyEventIndex[key].copy;
+				var localBendDelay = dur * bendDelay;
+
 				keyEventIndex[key] = keyEventIndex[key] + 1;
 
 				wait(delay);
@@ -186,11 +260,18 @@ Cembalo {
 				// the `keyOn' method checks if the rate is set to
 				// nil. if it is, it will do all the necessary
 				// transpositions for the different temperaments.
-				this.keyOn(key, pan, rate:rate, timbre: timbre);
-
-				wait(dur - delay);
+				this.keyOn(key, pan, rate: rate, timbre: timbre);
+				
+				wait(localBendDelay - delay);
 
 				if(keyEventIndex[key] - 1 == localIndex, {
+					this.bendKey(key, bendAm)
+				});
+				
+				wait(dur - delay - localBendDelay);
+
+				if(keyEventIndex[key] - 1 == localIndex, {
+					"turning off key %\n".postf(key);
 					this.keyOff(key)
 				})
 			}
@@ -201,7 +282,16 @@ Cembalo {
 	}
 
 	// *** Instance method: playMIDINote
-	playMIDINote {|note = 60, dur = 4, pan = 0, timbre = 0, strum = 0, randomStrum = false|
+	playMIDINote {
+		| note = 60
+		, dur = 4
+		, pan = 0
+		, timbre = 0
+		, strum = 0
+		, randomStrum = false
+		, bendDelay = 0
+		, bendAm = 1
+		|
 
 		// One level of abstraction up from `makeKeyEvent'. The user supplies
 		// a MIDI note (can be an array), a duration, a panning value (can be
@@ -226,13 +316,24 @@ Cembalo {
 				dur[index % dur.size],
 				delay[index],
 				pan[index % pan.size],
-				timbre: timbre
+				timbre: timbre,
+				bendDelay: bendDelay,
+				bendAm: bendAm
 			)
 		}
 	}
 
 	// *** Instance method: playNote
-	playNote {|freq = 440, dur = 4, pan = 0, timbre = 0, strum = 0, randomStrum = false|
+	playNote {
+		| freq = 440
+		, dur = 4
+		, pan = 0
+		, timbre = 0
+		, strum = 0
+		, randomStrum = false
+		, bendDelay = 1
+		, bendAm = 1
+		|
 
 		// As with `playMIDINote': one level of abstraction higher than
 		// `makeKeyEvent'. Instead of a midi note number, the user here
@@ -248,6 +349,8 @@ Cembalo {
 			var asMIDI = item.cpsmidi;
 			// convert the midi value to integer, i.e actual midi note numbers
 			var midiNN = asMIDI.floor.asInteger.clip(0,127);
+			// find the closest sample that can be used
+			midiNN = this.findClosestSample(midiNN);
 			// add the key index to the list of keys
 			key = key.add(midiNN);
 			// add the rate value by diffing the floored midi value
@@ -272,7 +375,9 @@ Cembalo {
 				delay[index],
 				pan[index % pan.size],
 				rate[index],
-				timbre: timbre
+				timbre: timbre,
+				bendDelay: bendDelay,
+				bendAm: bendAm
 			)
 		}
 	}
@@ -450,11 +555,39 @@ Cembalo {
 	// *** Instance method: amp_
 	amp_{|newAmp|
 		amp = newAmp;
+		keys.do{|item|
+			item.amp_(amp)
+		};
 	}
 
 	// *** Instance method: masterRate_
 	masterRate_{|newMasterRate|
 		masterRate = newMasterRate
+	}
+
+	/// *** Instance method: attack_
+	attack_{|val|
+		attack = val;
+		keys.do{|item|
+			if(item.notNil, {
+				item.attack_(attack)
+			})
+		}
+	}
+
+	// *** Instance method: release_
+	release_{|val|
+		release = val;
+		keys.do{|item|
+			if(item.notNil, {
+				item.release_(release)
+			})
+		}
+	}
+
+	// *** Instance method: setSampleCentDeviation
+	setSampleCentOffset {|sample=60, val=0|
+		buffers[sample][\centOffset] = val
 	}
 
 	// *** Instance method: outputMappingSetup
@@ -495,11 +628,13 @@ Cembalo {
 					pan: ~pan,
 					timbre: ~timbre,
 					randomStrum: ~randomStrum,
+					bendDelay: ~bendDelay,
+					bendAm: ~bendAm
 				);
 			}, {
 				~play = "You have to supply an instace of Cembalo".postln
 			})
-		}, (randomStrum: false, timbre: 0))
+		}, (randomStrum: false, timbre: 0, bendDelay: 1, bendAm: 1))
 	}
 
 	// *** Instance method: generateFifthBasedScale
@@ -717,9 +852,11 @@ Cembalo {
 			, rate = 1
 			, pan = 0
 			, amp = 1
+			, atk = 0
+			, rel = 0
 			|
 
-			var env = EnvGen.kr(Env.asr(0,1,0), gate, doneAction:2);
+			var env = EnvGen.kr(Env.asr(atk,1,rel), gate, doneAction:2);
 			var sig = PlayBuf.ar(2, buf, rate.lag() * BufRateScale.kr(buf)) * env;
 
 			sig = Balance2.ar(sig[0], sig[1], pan);
@@ -757,9 +894,11 @@ Cembalo {
 			, rate = 1
 			, pan = 0
 			, amp = 1
+			, atk = 0
+			, rel = 0
 			|
 
-			var env = EnvGen.kr(Env.asr(0,1,0), gate, doneAction:2);
+			var env = EnvGen.kr(Env.asr(atk,1,rel), gate, doneAction:2);
 			var sig = PlayBuf.ar(1, buf, rate.lag() * BufRateScale.kr(buf)) * env;
 
 			sig = Pan2.ar(sig, pan);
@@ -796,9 +935,11 @@ Cembalo {
 			, rate = 1
 			, pan = 0
 			, amp = 1
+			, atk = 0
+			, rel = 0
 			|
 
-			var env = EnvGen.kr(Env.asr(0,1,0), gate, doneAction:2);
+			var env = EnvGen.kr(Env.asr(atk,1,rel), gate, doneAction:2);
 			var sig = PlayBuf.ar(2, buf, rate.lag() * BufRateScale.kr(buf)) * env;
 			
 			sig = Mix(sig);
@@ -833,9 +974,11 @@ Cembalo {
 			, rate = 1
 			, pan = 0
 			, amp = 1
+			, atk = 0
+			, rel = 0
 			|
 
-			var env = EnvGen.kr(Env.asr(0,1,0), gate, doneAction:2);
+			var env = EnvGen.kr(Env.asr(atk,1,rel), gate, doneAction:2);
 			var sig = PlayBuf.ar(1, buf, rate.lag() * BufRateScale.kr(buf)) * env;
 
 			sig = sig * amp;
@@ -860,6 +1003,26 @@ Cembalo {
 		}).add;
 	}
 
+	// *** Instance method: loadConfiguration
+	loadConfiguration {
+		if(userSamplePath.notNil, {
+			configurationPath = userSamplePath ++ "info.json"
+		}, {
+			configurationPath = path ++ "samples/info.json"
+		});
+
+		if(File.exists(configurationPath), {
+			var file = File.new(configurationPath, "r").readAllString;
+			configuration = file.parseJSON;
+		}, {
+			var file;
+			configurationPath = path ++ "samples/info.json";
+
+			file = File.new(configurationPath, "r").readAllString;
+			configuration = file.parseJSON;
+		});
+	}
+
 	// *** Instance method: loadBuffers
 	loadBuffers {
 		var bodyPath, releasePath;
@@ -877,7 +1040,7 @@ Cembalo {
 			var num = filePath.findRegexp(".{3}(?=.wav)")[0][1].compile.value();
 			var buffer = Buffer.read(server, filePath);
 
-			buffers[num] = Dictionary.newFrom([\nn, num, \body, buffer]);
+			buffers[num] = Dictionary.newFrom([\nn, num, \body, buffer, \centOffset, 0]);
 		};
 
 		releasePath.pathMatch.do{|filePath|

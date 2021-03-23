@@ -1,7 +1,7 @@
 CembaloKey {
-	var <nn, out, outL, outR, amp, pan, <bodyBuffer, <releaseBuffer, sampleAdjust, parent;
+	var <nn, <out, outL, outR, amp, pan, attack, release, <bodyBuffer, <releaseBuffer, sampleAdjust, parent;
 	var <player, playerTimer, keyIsDepressed = false, sustainPedal = false;
-	var rate = 1, bendAm = 0, timbre = 0, compRate = 1;
+	var rate = 1, bendAm = 1, timbre = 0, compRate = 1;
 	var bodyLength;
 
 	// * Class method: *new
@@ -12,6 +12,8 @@ CembaloKey {
 		, outR = 1
 		, amp = 0.7
 		, pan = 0
+		, attack = 0
+		, release = 0
 		, bodyBuffer = 0
 		, releaseBuffer = 0
 		, sampleAdjust = 1
@@ -25,6 +27,8 @@ CembaloKey {
 			outR,
 			amp,
 			pan,
+			attack,
+			release,
 			bodyBuffer,
 			releaseBuffer,
 			sampleAdjust,
@@ -32,8 +36,9 @@ CembaloKey {
 		).initCembaloKey;		
 	}
 
+	// *** Instance method: initCembaloKey
 	initCembaloKey {
-		bodyLength = bodyBuffer.numFrames / bodyBuffer.sampleRate;
+		bodyLength = (((bodyBuffer.numFrames / bodyBuffer.sampleRate) / rate) / compRate);
 	}
 
 	// * Instance method: keyOn
@@ -65,8 +70,10 @@ CembaloKey {
 				\out, out,
 				\outL, outL,
 				\outR, outR,
-				\rate, rate * bendAm.midiratio * compRate * sampleAdjust,
+				\rate, rate * bendAm * compRate * sampleAdjust,
 				\pan, pan,
+				\atk, attack,
+				\rel, release,
 				\amp, amp
 			]);
 		}, {
@@ -75,14 +82,16 @@ CembaloKey {
 				\out, out,
 				\outL, outL,
 				\outR, outR,
-				\rate, rate * bendAm.midiratio * compRate * sampleAdjust,
+				\rate, rate * bendAm * compRate * sampleAdjust,
 				\pan, pan,
+				\atk, attack,
+				\rel, release,
 				\amp, amp
 			]);
 		});
 			
 		
-		playerTimer = fork { wait(bodyLength - 0.1); player.set(\gate, 0); player = nil };
+		// playerTimer = fork { wait(bodyLength - 0.1); player.set(\gate, 0); player = nil };
 		
 		keyIsDepressed = true;
 	}
@@ -97,14 +106,14 @@ CembaloKey {
 				player = nil;
 			});
 
-			if(releaseBuffer.notNil, {
+			if((releaseBuffer.notNil) && (release == 0), {
 				if(releaseBuffer.numChannels == 2, {
 					Synth(parent.releaseSynthdef, [
 						\buf, releaseBuffer,
 						\out, out,
 						\outL, outL,
 						\outR, outR,
-						\rate, rate * bendAm.midiratio * compRate * sampleAdjust,
+						\rate, rate * bendAm * compRate * sampleAdjust,
 						\pan, pan,
 						\amp, amp
 					]);
@@ -114,7 +123,7 @@ CembaloKey {
 						\out, out,
 						\outL, outL,
 						\outR, outR,
-						\rate, rate * bendAm.midiratio * compRate * sampleAdjust,
+						\rate, rate * bendAm * compRate * sampleAdjust,
 						\pan, pan,
 						\amp, amp
 					]);
@@ -122,12 +131,12 @@ CembaloKey {
 			});
 		});
 
-		this.bend(0);
+		this.bend(1);
 	}	
 	
 	// * Instance method: adjustRate
 	adjustRate {
-		var sampleindex, adjusted_rate;
+		var sampleindex, adjusted_rate, buffer_cent_offset;
 		// remap timbre value to -32 <-> 32. `sampleindex' will be the
 		// sample to use for playback.
 		sampleindex = (timbre * (-32)).asInteger;
@@ -145,14 +154,23 @@ CembaloKey {
 		if(releaseBuffer.notNil,{
 			releaseBuffer = parent.buffers[sampleindex][\release];
 		});
-		
-		compRate = adjusted_rate;
+
+		// apply offset that's inherent in the buffer:
+		if(parent.buffers[sampleindex][\centOffset].notNil, {
+			buffer_cent_offset = parent.buffers[sampleindex][\centOffset] / 100
+		}, {
+			buffer_cent_offset = 0
+		});
+
+		compRate = adjusted_rate * (buffer_cent_offset * (-1)).midiratio;
+		this.initCembaloKey()
 	}
 
+	// *** Instance method: bend
 	bend {|val|
 		bendAm = val;
 		if(player.notNil, {
-			player.set(\rate, rate * bendAm.midiratio * compRate * sampleAdjust)
+			player.set(\rate, rate * bendAm * compRate * sampleAdjust)
 		})
 	}
 
@@ -163,7 +181,23 @@ CembaloKey {
 
 	// * Instance method: amp_
 	amp_ {|val|
-		out = val
+		amp = val
+	}
+
+	out_ {|val|
+		out = val.div(1);
+		outL = val.div(1);
+		outR = val.div(1) + 1;
+	}
+
+	// *** Instance method: attack_
+	attack_ {|val|
+		attack = val
+	}
+
+	// *** Instance method: release_
+	release_ {|val|
+		release = val
 	}
 }
 // Local Variables:
