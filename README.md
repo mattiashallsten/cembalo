@@ -46,7 +46,7 @@ So, if you know for example that you D above middle C is 4 cents flat, input tha
 
 Now, if you want to load your own samples just pass the path to the directory to the `userSamplePath` argument:
 
-```sclang
+```supercollider
 c = Cembalo(userSamplePath:"path/to/dir/")
 ```
 
@@ -102,7 +102,7 @@ When playing a note using `keyOn`, `playMIDINote` or `playNote`, the user can su
 
 When loading the class, a new event type is also loaded: `\cembalo`. It is used as follows:
 
-```sclang
+```supercollider
 // define an instance of `Cembalo'
 c = Cembalo()
 
@@ -142,7 +142,7 @@ Pbindef(\cembalo).stop;
 
 Simply call the `.keyOn` method inside of a `MIDIFunc`. If the sample doesn\'t exist, SuperCollider will tell you.
 
-``` sclang
+``` supercollider
 (
 // First, initialize a `Cembalo'
 c = Cembalo();
