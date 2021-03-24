@@ -42,6 +42,12 @@ The file =info.json= is where all configuration is stored. If no configuration f
 
 So, if you know for example that you D above middle C is 4 cents flat, input that and =Cembalo= will compensate when playing back the sample.
 
+No, if you want to load your own samples just pass the path to the directory to the =userSamplePath= argument:
+
+#+begin_src sclang
+c = Cembalo(userSamplePath:"path/to/dir/")
+#+end_src
+
 * Regarding meantone (and other fifth-based tunings)
 The traditional way to generate a meantone temperament (or any temperament based on fifths, for that matters) is by starting from the note D. This takes us around the circle of fiths like this:
 
