@@ -1,5 +1,5 @@
 #+title: Cembalo
-A harpsichord in SuperCollider.
+A harpsichord and sample player in SuperCollider.
 
 * Installation
 Clone this repository into the SuperCollider extensions folder, found by running =Platform.userExtensionDir= in SuperCollider.
