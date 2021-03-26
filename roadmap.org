@@ -1,0 +1,180 @@
+* Roadmap, todo
+** TODO [#A] Change from =isSymbol= (part of extension)
+I [[file:Cembalo.sc::692][Cembalo.sc]]
+
+Lättaste är väl att kolla direkt, dvs =if(tuning == 'mean', {})=. Det går alltid att kolla listor. =isArray= finns i stdlib.
+
+Fast det blir så mycket nästade if-slingor då -- sc kan ju inte ha =if else=. Hmm. Lättare kanske är att ha ett =tuningType=-argument i alla fall. Typ ="r"= för "ratios", ="n"= för "name", ="c"= för "comma".
+
+Eller inte. Jag kan bara flytta alla if-slingor över den för symboler, och ha den sist. Quick fix, men det funkar nog bättre än annars.
+** TODO [#B] Implement "tuning types", for visualisation
+** TODO [#C] Implement GUI
+** TODO [#C] Implement sustain pedal
+** TODO [#B] Change =root= variable to also accept symbols, i.e 'a', 'b', 'g' etc.
+** TODO [#C] Change =playChord= method so that it is possible to input frequencies
+** TODO [#C] Add =strum= argument to =aitake= method in =CembaloSho=
+** TODO [#C] Add fade to all body samples
+* Roadmap, done
+** DONE Implement attack and release values
+** DONE Add support for different temperaments in the samples, defining what offset to using in playback rate
+** DONE Change the way samples are loaded -- always initialize a list of keys (size 128), finding closest sample that is not =None=
+** DONE Revise meantone and pythagorean tunings: think more about what in fact is the root note of that tuning in relation to where the wolf occurs
+** DONE Add support for user-supplied sample banks, checking if release samples should be used or not.
+- [X] Change naming conventions, use only numbers
+- [X] Have the program look for release samples, and not use if not found.
+- [X] Regex for finding last characters in file name, i.e note number
+- [X] Argument for user path, check if set
+** DONE Implement custom event type
+** DONE Setting different tunings
+- [X] Pythagorean
+- [X] Simple 5-limit
+- [X] Simple 7-limit
+- [X] Meantone
+- [X] Possibility to add custom tunings
+** DONE Add possibility to randomize release times when playing multiple notes at once
+- [X] Add =.rrand= to the =.wait= value
+- [X] Add boolean variable
+** DONE Add =outputMapping= variable
+- [X] Check for lists in lists
+- [X] Add outL and outR variables to stereo SynthDefs
+- [X] Add helper method for setting up output mapping - if not list in
+  list, make it list in list
+** DONE Add =mixToMono= option, for mapping to different outputs
+- [X] Create mono versions of both SynthDefs
+- [X] Add if statements in setup
+** DONE Implement =playChord= method
+** DONE Maybe write a =CembaloKey= class
+** DONE Load buffers from samples directory
+** DONE Function for playing midi notes
+** DONE Function for playing notes, freq input
+** DONE Trim all the samples
+** DONE Setting different root notes for different tunings
+* Ideas
+** Adding root frequency funcionality, i.e setting what not A should be
+ Det här skulle innebära att ändra ganska mycket grejer -- om min =root= är =d=, ska förhållandet mellan =d= och =a= diktera =masterRate=.
+
+ Detta räknas ut såhär:
+
+ #+begin_src sclang
+(
+var root = 0;							// a = 9
+
+var ratios = [
+	1,
+	16/15,
+	9/8,
+	6/5,
+	5/4,
+	4/3,
+	11/8,
+	3/2,
+	8/5,
+	5/3,
+	7/4,
+	16/15
+];
+
+var fromRoot = ratios[9] / ratios[0];
+
+var fromStandard = ((root + 60).midicps * fromRoot) / 440;
+
+fromStandard.postln
+)
+ #+end_src
+
+ Alltså: =root= är det index som vi anser vara vår 1/1. När vi multiplicerar det med vad nu är talförhållandet för tonen A vill vi att vi ska landa på 440, eller vilken stämton vi använder oss av. Med den givna stämningen vill vi alltså att 1/1 ska bli ett ET12-C i 440 Hz (eller annan stämton vi använder oss av). Vi räknar helt enkelt talförhållandet mellan det A vi nu får (om C är notnummer 60), och det A vi vill ha, och använder det som det talförhållande som vi snestämmer allt med.
+
+ Det vi vill ha är dock ett sätt att omdistrubera alla samplingar, så att varje tangent ändå får rätt sampling. Det är ett för stort projekt nu.
+** Configuration file
+ Jag har nu implementerat en konfigurationsfil i JSON-format, där man kan skriva in varje tons offset i cent. Jag provar först med inspelnignarna från 4207, och använder RX för att få fram vilken tonhöjd varje sampling har. Det är svårt -- det blir fel. Jag ska kolla på lite olika alternativ.
+
+ Det jag måste bestämma mig för är vad "cent" ska vara -- är det hur många cent tonen måste justeras, eller är det hur många cent tonen är off? Det blir ju iofs bara negativt/positivt, men i alla fall. Det är därför det blev så fel förut! Nu är det ordnat, och nu verkar mätningarna från RX stämma.
+
+** DONE Changing the way samples are loaded
+ En idé är att ändra hur samplingar laddas. Som det ser ut nu så laddas alla samplingar i en lista, som alltså blir lika stor som antalet samplingar. Den håller inte koll på om några samplingar saknas, och det finns därför en risk för fel om en sampling anropas som inte finns -- om t.ex. midi nn 76 inte finns så tar den kanske midi nn 77.
+
+ Det här är inte ett så värst stort problem kanske, men jag tror att det kan vara en idé att istället alltid låta listan med samplingar ha storleken 128, och på de platser där det inte finns några samplingar ligger =nil=. Då får användaren själv avgöra om den vill att programmet ska ta från andra samplingar (och ändra uppspelningshastigheten) eller inte.
+
+ Som det ser ut nu så har jag en metod =.keyOn= som spelar den tangenten man anger -- i default-samplingarna är lägsta tonen nn 24 (lågt c) och om man anropar =.keyOn(0)= så är det den tonen som spelas. Det är löst med hjälp av hjälpmetoden =.noteOn=, som översätter midi nn till vilken tangent som ska spelas. När samplingarna laddas så ställs variabeln =midiNoteOffset= som håller koll på lägsta tonen i sample-banken, och =midiNoteCeil= som håller koll på högsta tonen.
+
+ Jag tror att det nog är ganska mycket jobb för inte så mycket resultat, men jag tror att det kommer att vara bra i längden. Jag ska göra en genomgång av koden och göra en överblick över vilken arbete som skulle behöva göras.
+
+*** DONE newkeys
+ - [X] Use 1 list for buffers instead of 2.
+ - [X] Load buffers in dictionary, with =bodybuffer=, =releasebuffer= and =nn= attribute (maybe =offset= as well?)
+ - [X] Store keys in a larger array. Load keys by iterating over the list of buffers.
+ - [X] Access keys by supplying their note numbers, not the key number.
+ - [X] Change =keyEventIndex= to work with the new system.
+ - [-] Adjust all the methods for interaction
+   - [X] =bendKey=
+   - [X] =makeKeyEvent=
+   - [X] =playMIDINote=
+   - [X] =playNote=
+   - [ ] =playChord=
+   - [X] =repeatChord=
+   - [X] =transformChord=
+   - [X] =addToChord=
+   - [X] =removeFromChord=
+   - [X] =tuningSetup=
+   - [X] =applyTimbre=
+ - [ ] =CembaloKey= should accept =nil= as releaseBuffer input, and handle that itself.
+
+ Kanske ska man låta stämningssetupen ske inuti =CembaloKey=-klassen?
+
+ Jag tror att jag måste skriva en funktion som hittar närmast möjliga tangent. 
+
+*** Option to have the program use re-tuned samples for keys without samples
+ After all the keys are loaded, go through the keys to see which ones are present and which ones aren't. If a key is not present, find the closest buffer to that key and initialize a key using that buffer.
+
+ I tried this out, and everything was handled by the timbre method I wrote!
+** Support for velocity?
+ Perhaps as a digital extension of the harpsichord, maybe it could be interesting
+ to add a low-pass filter to enable velocity controll -- when hitting hard, the
+ cutoff frequency is high. When hitting soft, it is low.
+** DONE Event type
+ In the SuperCollider documentation, under =Event/Event's play method=, it is described how to change the default play method.
+
+ In the same document, under =Event.addEventType=, it is described how to create a custom event type.
+
+ The way to do it is this:
+
+ #+begin_src sclang
+(
+Event.addEventType(\cembalo, {
+	if(~cembalo.notNil, {
+		~play = ~cembalo.playNote(
+			freq: ~freq.value,
+			dur: ~sustain.value,
+			strum: ~strum.value,
+			randomStrum: ~randomStrum,
+			randomRelease: ~randomRelease,
+			panDispersion: ~panDispersion
+		)
+	}, {
+		~play = "You have to supply an instace of Cembalo".postln
+	})
+}, (randomStrum: false, randomRelease: 0, panDispersion: 0))
+)
+ #+end_src
+
+ What's happening here is that I'm overriding the default =~play= function, and having it call the =Cembalo.playNote= method.
+** DONE Support for =timbre= argument
+ One idea is for the playback to support a =timbre= argument. The default would be 0, which means no change to the timbre. If the =timbre= is set to high, the class would select samples with a lower pitch and increase the playback rate to compensate, i.e adding more high frequency content. If the =timbre= is set to low, the class would select samples of a higher pitch and lower the playback rate to compensate, i.e lowering the amount of high frequency content.
+** DONE keyOn and keyOff
+ I'm trying to write methods that turn a key on or off. My goal is for SuperCollider to be awhare of when a key has been pressed, and stop SuperCollider from sending =keyOff= messages to early. Not leave hanging notes, for short.
+
+ I more abstract terms I want to disable all upcoming =keyOff= messages when the key has in fact been turned off. I realize now that this probably needs to be done in the =playNote= and =playMIDINote= methods, /not/ in the =keyOn= and =keyOff= messages. This has to do with scheduling.
+
+ I've sort of put myself in the corner by limiting the number of keys. But I really want it to sound realistic!
+
+ EDIT: I've solved it now. It is documented in the class definition, under =playMIDINote=. Like this:
+
+ The `keysPressedIndex' and `localIndex' variables work like this: 
+
+ The `keysPressedIndex' variable is an array, initialized to contain only zeros and have the same length as the number of buffers (the number of keys). Each time a key is played using the timed methods (.playMIDINote and .playNote), the value of this array at the index of the key is read and stored at `localIndex', in order to now what "event" is being played. The value is then increased by 1, so that the next "event" will have a new index. When it is time to turn off the note, it checks to see if we are in fact on the same event or if a new event has happened before the first one is finished. If a new event is happening, it doesn't bother with turning the note off.
+** DONE Change chord
+ Like I did in the =MHSho= class, it would be cool to implmement a functionality where I can change a "current" chord. Say I play Cmaj -- if I then change to Cmaj7, only the B is added, and the other notes aren't repeated.
+** DONE Different root notes
+  This was just a matter of "shifting" the array containing the rates x steps. Since the rates only specify us offsets from et12, what's really happening is just that these offsets get moved around. The amount that each note differs from et12 just switches. Pretty hard to grasp, but I think I get it.
+** DONE Getting samples
+ Samples are recorded from the Nord Stage2, MIDI NN 24-108. I then chop them up in Reaper, by splitting the "body" and the "release" of the sound. These are added in separate directories, but with the same name (=cembalo-<nn>.wav=).
