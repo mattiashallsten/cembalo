@@ -4,7 +4,7 @@ Cembalo {
 	var server, path;
 	var <buffers, configurationPath, <configuration;
 	var <keys;
-	var rates, transposedRates, acceptableTunings, tuningType;
+	var rates, transposedRates, acceptableTunings, <tuningType;
 	var <midiNoteOffset = 24, <midiNoteCeil;
 	var keyEventIndex;
 	var currentChord, chordOctave = 0;
@@ -70,7 +70,7 @@ Cembalo {
 
 		// Initialize scaleType variable -- will be set in tuningSetup
 		"Setting up tuning...".postln;
-		this.tuningSetup(tuning);
+		this.tuning_(tuning);
 		"Done.".postln;
 
 		keys = nil!128;
@@ -546,11 +546,7 @@ Cembalo {
 		this.tuningSetup(tuning)
 	}
 
-	// *** Instance method: tuning_
-	tuning_{|newTuning|
-		tuning = newTuning;
-		this.tuningSetup(tuning);
-	}
+
 
 	// *** Instance method: amp_
 	amp_{|newAmp|
@@ -688,6 +684,13 @@ Cembalo {
 		scale = scale.sort;
 		^scale
 	}
+	
+	// *** Instance method: tuning_
+	tuning_{|newTuning, type="t"|
+		tuning = newTuning;
+		tuningType = type;
+		this.tuningSetup(tuning);
+	}
 
 	// *** Instance method: tuningSetup
 	tuningSetup {|tuning|
@@ -717,7 +720,10 @@ Cembalo {
 				})
 			}
 		}, {
-			if(tuning.isSymbol, {
+			if(tuning.isNumber, {
+				var scale = this.generateFifthBasedScale(tuning);
+				this.tuningSetup(scale);
+			}, {
 				switch(tuning,
 					'et12', {rates = 1!12},
 					'mean', {
@@ -768,14 +774,7 @@ Cembalo {
 						rates = 1!12
 					}
 				)
-			}, {
-				if(tuning.isNumber, {
-					var scale = this.generateFifthBasedScale(tuning);
-					this.tuningSetup(scale);
-				}, {
-					"Tuning % not valid".format(tuning).postln;
-				})
-			});
+			})
 		});
 
 		transposedRates = rates.rotate(root % 12);
