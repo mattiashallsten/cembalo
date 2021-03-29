@@ -42,18 +42,30 @@ CembaloKey {
 	}
 
 	// * Instance method: keyOn
-	keyOn {|newRate, newAmp, newPan, newTimbre = 0|
+	keyOn {|newRate, newAmp, newPan, newTimbre = 0, newAttack, newRelease|
 
-		if(newRate.notNil, {
-			rate = newRate
-		});
-		if(newAmp.notNil, {
-			amp = newAmp
-		});
-		if(newPan.notNil, {
-			pan = newPan
-		});
+		// if(newRate.notNil, {
+		// 	rate = newRate
+		// });
+		// if(newAmp.notNil, {
+		// 	amp = newAmp
+		// });
+		// if(newPan.notNil, {
+		// 	pan = newPan
+		// });
+		// if(newAttack.notNil, {
+		// 	attack = newAttack
+		// });
+		// if(newRelease.notNil, {
+		// 	release = newRelease
+		// });
+
+		rate = newRate ? rate;
+		amp = newAmp ? amp;
+		pan = newPan ? pan;
 		timbre = newTimbre;
+		attack = newAttack ? attack;
+		release = newRelease ? release;
 		
 		if(keyIsDepressed, {
 			this.keyOff;

@@ -1,5 +1,5 @@
 * Roadmap, todo
-** TODO [#A] Change from =isSymbol= (part of extension)
+** DONE [#A] Change from =isSymbol= (part of extension)
 I [[file:Cembalo.sc::692][Cembalo.sc]]
 
 Lättaste är väl att kolla direkt, dvs =if(tuning == 'mean', {})=. Det går alltid att kolla listor. =isArray= finns i stdlib.

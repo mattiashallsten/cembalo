@@ -170,7 +170,7 @@ Cembalo {
 	}
 
 	// *** Instance method: keyOn
-	keyOn {|key = 60, pan = 0, amp = 0.7, rate, timbre=0|
+	keyOn {|key = 60, pan = 0, amp = 0.7, rate, timbre=0, attack, release|
 
 		// This is how to interact with the `keyOn' method within the
 		// `CembaloKey' class on the lowest abstraction level. The method
@@ -182,7 +182,7 @@ Cembalo {
 			rate = transposedRates[(key) % 12];
 		});
 		if(keys[key].notNil, {
-			keys[key].keyOn(rate * masterRate, amp, pan, timbre)
+			keys[key].keyOn(rate * masterRate, amp, pan, timbre, attack, release)
 		}, {
 			"MIDI note number % not available in current sample bank!\n".postf(key);
 		});
@@ -234,6 +234,8 @@ Cembalo {
 		, timbre = 0
 		, bendDelay = 1
 		, bendAm = 1
+		, attack = 0
+		, release = 0
 		|
 
 		// One level of abstraction up from `keyOn'. The user supplies a key,
@@ -260,7 +262,7 @@ Cembalo {
 				// the `keyOn' method checks if the rate is set to
 				// nil. if it is, it will do all the necessary
 				// transpositions for the different temperaments.
-				this.keyOn(key, pan, rate: rate, timbre: timbre);
+				this.keyOn(key, pan, rate: rate, timbre: timbre, attack: attack, release: release);
 				
 				wait(localBendDelay - delay);
 
@@ -271,7 +273,6 @@ Cembalo {
 				wait(dur - delay - localBendDelay);
 
 				if(keyEventIndex[key] - 1 == localIndex, {
-					"turning off key %\n".postf(key);
 					this.keyOff(key)
 				})
 			}
@@ -333,6 +334,8 @@ Cembalo {
 		, randomStrum = false
 		, bendDelay = 1
 		, bendAm = 1
+		, attack
+		, release
 		|
 
 		// As with `playMIDINote': one level of abstraction higher than
@@ -368,6 +371,11 @@ Cembalo {
 		pan = pan.asArray;
 		dur = dur.asArray;
 
+		attack = attack ? [0];
+		attack = attack.asArray;
+		release = release ? [0];
+		release = release.asArray;
+
 		key.do{|item, index|
 			this.makeKeyEvent(
 				item,
@@ -377,7 +385,10 @@ Cembalo {
 				rate[index],
 				timbre: timbre,
 				bendDelay: bendDelay,
-				bendAm: bendAm
+				bendAm: bendAm,
+				attack: attack[index % dur.size],
+				release: release[index % dur.size]
+				
 			)
 		}
 	}
