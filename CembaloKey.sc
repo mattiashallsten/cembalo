@@ -1,5 +1,5 @@
 CembaloKey {
-	var <nn, <out, outL, outR, amp, pan, attack, release, <bodyBuffer, <releaseBuffer, sampleAdjust, parent;
+	var <nn, <output, outputL, outputR, amp, pan, attack, release, <bodyBuffer, <releaseBuffer, parent;
 	var <player, playerTimer, keyIsDepressed = false, sustainPedal = false;
 	var rate = 1, bendAm = 1, timbre = 0, compRate = 1;
 	var bodyLength;
@@ -16,7 +16,6 @@ CembaloKey {
 		, release = 0
 		, bodyBuffer = 0
 		, releaseBuffer = 0
-		, sampleAdjust = 1
 		, parent = nil
 		|
 
@@ -31,7 +30,6 @@ CembaloKey {
 			release,
 			bodyBuffer,
 			releaseBuffer,
-			sampleAdjust,
 			parent
 		).initCembaloKey;		
 	}
@@ -42,30 +40,21 @@ CembaloKey {
 	}
 
 	// * Instance method: keyOn
-	keyOn {|newRate, newAmp, newPan, newTimbre = 0, newAttack, newRelease|
+	keyOn {|newRate, newAmp, newPan, newTimbre = 0, newAttack, newRelease, newOut|
+		var out = newOut ? output;
+		var outL = newOut ? outputL;
+		var outR = outputR;
 
-		// if(newRate.notNil, {
-		// 	rate = newRate
-		// });
-		// if(newAmp.notNil, {
-		// 	amp = newAmp
-		// });
-		// if(newPan.notNil, {
-		// 	pan = newPan
-		// });
-		// if(newAttack.notNil, {
-		// 	attack = newAttack
-		// });
-		// if(newRelease.notNil, {
-		// 	release = newRelease
-		// });
-
+		if(newOut.notNil, {
+			outR = outL + 1
+		});
+		
 		rate = newRate ? rate;
 		amp = newAmp ? amp;
 		pan = newPan ? pan;
-		timbre = newTimbre;
 		attack = newAttack ? attack;
 		release = newRelease ? release;
+		timbre = newTimbre;
 		
 		if(keyIsDepressed, {
 			this.keyOff;
@@ -74,15 +63,13 @@ CembaloKey {
 		// make adjustments in playback rate (set value of compRate)
 		this.adjustRate;
 		
-		
-		//		"turning on key %".format(nn).postln;
 		if(bodyBuffer.numChannels == 2, {
 			player = Synth(parent.bodySynthdef, [
 				\buf, bodyBuffer,
 				\out, out,
 				\outL, outL,
 				\outR, outR,
-				\rate, rate * bendAm * compRate * sampleAdjust,
+				\rate, rate * bendAm * compRate,
 				\pan, pan,
 				\atk, attack,
 				\rel, release,
@@ -94,7 +81,7 @@ CembaloKey {
 				\out, out,
 				\outL, outL,
 				\outR, outR,
-				\rate, rate * bendAm * compRate * sampleAdjust,
+				\rate, rate * bendAm * compRate,
 				\pan, pan,
 				\atk, attack,
 				\rel, release,
@@ -109,7 +96,19 @@ CembaloKey {
 	}
 	
 	// * Instance method: keyOff
-	keyOff {
+	keyOff {|newOut|
+		var out, outL, outR;
+
+		if(out.notNil, {
+			out = newOut;
+			outL = newOut;
+			outR = newOut + 1
+		}, {
+			out = output;
+			outL = outputL;
+			outR = outputR;
+		});
+			
 		if(keyIsDepressed, {
 			if(playerTimer.notNil, { playerTimer.stop } );
 			
@@ -125,7 +124,7 @@ CembaloKey {
 						\out, out,
 						\outL, outL,
 						\outR, outR,
-						\rate, rate * bendAm * compRate * sampleAdjust,
+						\rate, rate * bendAm * compRate,
 						\pan, pan,
 						\amp, amp
 					]);
@@ -135,7 +134,7 @@ CembaloKey {
 						\out, out,
 						\outL, outL,
 						\outR, outR,
-						\rate, rate * bendAm * compRate * sampleAdjust,
+						\rate, rate * bendAm * compRate,
 						\pan, pan,
 						\amp, amp
 					]);
@@ -182,7 +181,7 @@ CembaloKey {
 	bend {|val|
 		bendAm = val;
 		if(player.notNil, {
-			player.set(\rate, rate * bendAm * compRate * sampleAdjust)
+			player.set(\rate, rate * bendAm * compRate)
 		})
 	}
 
@@ -196,10 +195,10 @@ CembaloKey {
 		amp = val
 	}
 
-	out_ {|val|
-		out = val.div(1);
-		outL = val.div(1);
-		outR = val.div(1) + 1;
+	output_ {|val|
+		output = val.div(1);
+		outputL = val.div(1);
+		outputR = val.div(1) + 1;
 	}
 
 	// *** Instance method: attack_

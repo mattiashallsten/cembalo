@@ -1,10 +1,10 @@
 Cembalo {
-	var <out, <tuning, <root, <amp, <masterRate, <outputmapping, <mixToMono;
+	var <out, <tuning, <root, <concertA, <amp, <outputmapping, <mixToMono;
 	var userSamplePath, fillLostSamples, attack, release;
 	var server, path;
 	var <buffers, configurationPath, <configuration;
 	var <keys;
-	var rates, transposedRates, acceptableTunings, <tuningType;
+	var rates, masterRate, transposedRates, acceptableTunings, <tuningType, bufferIndexOffset = 0;
 	var <midiNoteOffset = 24, <midiNoteCeil;
 	var keyEventIndex;
 	var currentChord, chordOctave = 0;
@@ -15,8 +15,8 @@ Cembalo {
 		| out = 0
 		, tuning = \et12
 		, root = 0
+		, concertA = 440
 		, amp = 0.7
-		, masterRate = 1
 		, outputmapping = 0
 		, mixToMono = false
 		, userSamplePath = nil
@@ -29,8 +29,8 @@ Cembalo {
 			out,
 			tuning,
 			root,
+			concertA,
 			amp,
-			masterRate,
 			outputmapping,
 			mixToMono,
 			userSamplePath,
@@ -51,6 +51,7 @@ Cembalo {
 
 		acceptableTunings = ['et12', 'fivelimit', 'sevenlimit', 'pyth', 'mean'];
 		rates = 1!12;
+		masterRate = 1;
 
 		outputmapping = this.outputMappingSetup(outputmapping);
 
@@ -92,6 +93,9 @@ Cembalo {
 			"Done".postln;
 
 			server.sync;
+
+			
+			this.adjustSampleOffset;
 
 			// Apply configuration to cent offsets
 			buffers.do{|item|
@@ -153,24 +157,41 @@ Cembalo {
 				"Done".postln;
 			});
 
-			"Loading custom event type...".postln;
 			this.eventTypeSetup;
-			"Done.".postln;
 
 			"Cembalo loaded.".postln;
 		}
 	}
 
 	getMax {
+		var index = 127;
+
+		while ({buffers[index] == nil}, {
+			if(buffers[index].notNil, {
+				midiNoteCeil = index;
+			}, {
+				index = index - 1
+			})
+		});
+
 		^midiNoteCeil
 	}
 	
 	getMin {
+		var index = 0;
+
+		while ({buffers[index] == nil}, {
+			if(buffers[index].notNil, {
+				midiNoteOffset = index;
+			}, {
+				index = index + 1
+			})
+		});
 		^midiNoteOffset
 	}
 
 	// *** Instance method: keyOn
-	keyOn {|key = 60, pan = 0, amp = 0.7, rate, timbre=0, attack, release|
+	keyOn {|key = 60, pan = 0, amp = 0.7, rate, timbre=0, attack, release, out|
 
 		// This is how to interact with the `keyOn' method within the
 		// `CembaloKey' class on the lowest abstraction level. The method
@@ -182,17 +203,17 @@ Cembalo {
 			rate = transposedRates[(key) % 12];
 		});
 		if(keys[key].notNil, {
-			keys[key].keyOn(rate * masterRate, amp, pan, timbre, attack, release)
+			keys[key].keyOn(rate * masterRate, amp, pan, timbre, attack, release, out)
 		}, {
 			"MIDI note number % not available in current sample bank!\n".postf(key);
 		});
 	}
 
 	// *** Instance method: keyOff
-	keyOff {|key = 60, pan = 0, amp = 0.7|
+	keyOff {|key = 60, pan = 0, amp = 0.7, out|
 		key = key.clip(0,127);
 		if(keys[key].notNil, {
-			keys[key].keyOff
+			keys[key].keyOff(out)
 		}, {
 			"MIDI note number % not available in current sample bank!\n".postf(key);
 		});
@@ -236,6 +257,7 @@ Cembalo {
 		, bendAm = 1
 		, attack = 0
 		, release = 0
+		, out
 		|
 
 		// One level of abstraction up from `keyOn'. The user supplies a key,
@@ -262,7 +284,7 @@ Cembalo {
 				// the `keyOn' method checks if the rate is set to
 				// nil. if it is, it will do all the necessary
 				// transpositions for the different temperaments.
-				this.keyOn(key, pan, rate: rate, timbre: timbre, attack: attack, release: release);
+				this.keyOn(key, pan, rate: rate, timbre: timbre, attack: attack, release: release, out: out);
 				
 				wait(localBendDelay - delay);
 
@@ -292,6 +314,9 @@ Cembalo {
 		, randomStrum = false
 		, bendDelay = 0
 		, bendAm = 1
+		, attack = 0
+		, release = 0
+		, out
 		|
 
 		// One level of abstraction up from `makeKeyEvent'. The user supplies
@@ -311,6 +336,9 @@ Cembalo {
 		pan = pan.asArray;
 		dur = dur.asArray;
 
+		attack = attack.asArray;
+		release = release.asArray;
+
 		key.do{|item, index|
 			this.makeKeyEvent(
 				item,
@@ -319,7 +347,10 @@ Cembalo {
 				pan[index % pan.size],
 				timbre: timbre,
 				bendDelay: bendDelay,
-				bendAm: bendAm
+				bendAm: bendAm,
+				attack: attack[index % dur.size],
+				release: release[index % dur.size],
+				out: out
 			)
 		}
 	}
@@ -336,6 +367,7 @@ Cembalo {
 		, bendAm = 1
 		, attack
 		, release
+		, out
 		|
 
 		// As with `playMIDINote': one level of abstraction higher than
@@ -387,7 +419,8 @@ Cembalo {
 				bendDelay: bendDelay,
 				bendAm: bendAm,
 				attack: attack[index % dur.size],
-				release: release[index % dur.size]
+				release: release[index % dur.size],
+				out: out
 				
 			)
 		}
@@ -567,11 +600,6 @@ Cembalo {
 		};
 	}
 
-	// *** Instance method: masterRate_
-	masterRate_{|newMasterRate|
-		masterRate = newMasterRate
-	}
-
 	/// *** Instance method: attack_
 	attack_{|val|
 		attack = val;
@@ -626,6 +654,8 @@ Cembalo {
 	// *** Instance method: eventTypeSetup
 	eventTypeSetup {
 		Event.removeEventType(\cembalo);
+		Event.removeEventType(\cembalomidi);
+		"Setting up regular event type...".postln;
 		Event.addEventType(\cembalo, {
 			if(~cembalo.notNil, {
 				~play = ~cembalo.playNote(
@@ -636,12 +666,51 @@ Cembalo {
 					timbre: ~timbre,
 					randomStrum: ~randomStrum,
 					bendDelay: ~bendDelay,
-					bendAm: ~bendAm
+					bendAm: ~bendAm,
+					attack: ~attack,
+					release: ~release,
+					out: ~out
 				);
 			}, {
 				~play = "You have to supply an instace of Cembalo".postln
 			})
-		}, (randomStrum: false, timbre: 0, bendDelay: 1, bendAm: 1))
+		}, (
+			randomStrum: false,
+			timbre: 0,
+			bendDelay: 1,
+			bendAm: 1,
+			attack: 0,
+			release: 0
+		));
+		"Done.".postln;
+
+		"Setting up midi event type...".postln;
+		Event.addEventType(\cembalomidi, {
+			if(~cembalo.notNil, {
+				~play = ~cembalo.playMIDINote(
+					note: ~midinote.value,
+					dur: ~sustain.value,
+					strum: ~strum.value,
+					pan: ~pan,
+					timbre: ~timbre,
+					randomStrum: ~randomStrum,
+					bendDelay: ~bendDelay,
+					bendAm: ~bendAm,
+					attack: ~attack,
+					release: ~release
+				);
+			}, {
+				~play = "You have to supply an instace of Cembalo".postln
+			})
+		}, (
+			randomStrum: false,
+			timbre: 0,
+			bendDelay: 1,
+			bendAm: 1,
+			attack: 0,
+			release: 0
+		));
+		"Done.".postln;
 	}
 
 	// *** Instance method: generateFifthBasedScale
@@ -695,6 +764,48 @@ Cembalo {
 		scale = scale.sort;
 		^scale
 	}
+
+	// *** Instance method: a_
+	concertA_ {|hertz|
+		concertA = hertz;
+		this.adjustSampleOffset;
+	}
+
+	// *** Instance method: adjustSampleOffset
+	adjustSampleOffset {
+		var ratio = this.tuningAsArray[9];
+		var concertC = 440 / 9.midiratio;
+		var diff, sampleOffset;
+		var oldOffset;
+
+		"Adjusting sample offset using A=%...\n".postf(concertA);
+				
+		masterRate = (concertA / ratio) / concertC;
+
+		diff = masterRate.ratiomidi;
+		sampleOffset = diff.floor.asInteger;
+
+		masterRate = (diff - sampleOffset).midiratio;
+
+		oldOffset = bufferIndexOffset;
+
+		bufferIndexOffset = sampleOffset;
+
+		sampleOffset = sampleOffset - oldOffset;
+
+		"Master rate: %\nSample offset: %\n".postf(masterRate, sampleOffset);
+		// Function that iterates over all the buffers and offsets
+		// them sampleOffset number of steps.
+		if(sampleOffset > 0, {
+			127.do{|index|
+				buffers[index - sampleOffset] = buffers[index]
+			}
+		}, {
+			(127..0).do{|index|
+				buffers[index - sampleOffset] = buffers[index]
+			}
+		});
+	}
 	
 	// *** Instance method: tuning_
 	tuning_{|newTuning, type="t"|
@@ -707,6 +818,7 @@ Cembalo {
 	tuningSetup {|tuning|
 		if(tuning.isArray, {
 			var len = tuning.size;
+
 			if(len < 12, {
 				var diff = 12 - len;
 				"not enough ratios: adding % 2".format(diff).postln;
@@ -722,13 +834,18 @@ Cembalo {
 					};
 				});
 			});
+			fork {
+				rates = tuning.collect{|item, index|
+					if(index == 0, {
+						1
+					}, {
+						item / index.midiratio
+					})
+				};
 
-			rates = tuning.collect{|item, index|
-				if(index == 0, {
-					1
-				}, {
-					item / index.midiratio
-				})
+				server.sync;
+				
+				this.adjustSampleOffset();
 			}
 		}, {
 			if(tuning.isNumber, {
@@ -789,6 +906,13 @@ Cembalo {
 		});
 
 		transposedRates = rates.rotate(root % 12);
+	}
+
+	// *** Instance method: tuningAsArray
+	tuningAsArray {
+		^transposedRates.collect{|item, index|
+			index.midiratio * item
+		};
 	}
 
 	// *** Instance method: arrayContains
