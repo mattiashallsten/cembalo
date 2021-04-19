@@ -295,7 +295,7 @@ Cembalo {
 				wait(dur - delay - localBendDelay);
 
 				if(keyEventIndex[key] - 1 == localIndex, {
-					this.keyOff(key)
+					this.keyOff(key, out: out)
 				})
 			}
 		}, {
@@ -680,7 +680,7 @@ Cembalo {
 			bendDelay: 1,
 			bendAm: 1,
 			attack: 0,
-			release: 0
+			release: 0,
 		));
 		"Done.".postln;
 
@@ -697,7 +697,8 @@ Cembalo {
 					bendDelay: ~bendDelay,
 					bendAm: ~bendAm,
 					attack: ~attack,
-					release: ~release
+					release: ~release,
+					out: ~out
 				);
 			}, {
 				~play = "You have to supply an instace of Cembalo".postln
@@ -708,7 +709,7 @@ Cembalo {
 			bendDelay: 1,
 			bendAm: 1,
 			attack: 0,
-			release: 0
+			release: 0,
 		));
 		"Done.".postln;
 	}

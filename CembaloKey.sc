@@ -57,7 +57,7 @@ CembaloKey {
 		timbre = newTimbre;
 		
 		if(keyIsDepressed, {
-			this.keyOff;
+			this.keyOff(newOut);
 		});
 
 		// make adjustments in playback rate (set value of compRate)
@@ -99,7 +99,7 @@ CembaloKey {
 	keyOff {|newOut|
 		var out, outL, outR;
 
-		if(out.notNil, {
+		if(newOut.notNil, {
 			out = newOut;
 			outL = newOut;
 			outR = newOut + 1
@@ -108,7 +108,7 @@ CembaloKey {
 			outL = outputL;
 			outR = outputR;
 		});
-			
+
 		if(keyIsDepressed, {
 			if(playerTimer.notNil, { playerTimer.stop } );
 			
@@ -140,6 +140,8 @@ CembaloKey {
 					]);
 				});
 			});
+
+			keyIsDepressed = false
 		});
 
 		this.bend(1);
