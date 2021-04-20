@@ -229,6 +229,13 @@ Cembalo {
 		keys.do{|key| if(key.notNil, { key.sustainPedalOff() } ) };
 	}
 
+	// *** Instance method: bendKeyStep
+	bendKeyStep {|key = 0, num = 0|
+		var val;
+		key = key.clip(0,128);
+		val = (transposedRates.wrapAt(key + num) * num.midiratio) / (transposedRates.wrapAt(key));
+		if(keys[key].notNil, { keys[key].bend(val) } )
+	}
 
 	// *** Instance method: bendKey
 	bendKey {|key = 0, val = 0|
@@ -681,6 +688,7 @@ Cembalo {
 			bendAm: 1,
 			attack: 0,
 			release: 0,
+			out: nil
 		));
 		"Done.".postln;
 
@@ -710,6 +718,7 @@ Cembalo {
 			bendAm: 1,
 			attack: 0,
 			release: 0,
+			out: nil
 		));
 		"Done.".postln;
 	}
@@ -794,7 +803,6 @@ Cembalo {
 
 		sampleOffset = sampleOffset - oldOffset;
 
-		"Master rate: %\nSample offset: %\n".postf(masterRate, sampleOffset);
 		// Function that iterates over all the buffers and offsets
 		// them sampleOffset number of steps.
 		if(sampleOffset > 0, {
@@ -844,7 +852,7 @@ Cembalo {
 					})
 				};
 
-				server.sync;
+				wait(0.5);
 				
 				this.adjustSampleOffset();
 			}
@@ -898,7 +906,24 @@ Cembalo {
 							7/4,
 							15/8
 						])
-					}, {
+					},
+					'w3', {
+						this.tuningSetup([
+							1,
+							256/243,
+							(64/81) * 2.pow(1/2),
+							32/27,
+							(256/243) * 2.pow(1/4),
+							4/3,
+							1024/729,
+							(8/9) * (2.pow(3)).pow(1/4),
+							128/81,
+							(1024/729) * 2.pow(1/4),
+							16/9,
+							(128/81) * 2.pow(1/4)
+						])
+					},
+					{
 						"Tuning % not found! Using default et12.\n".postf(tuning);
 						rates = 1!12
 					}
