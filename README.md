@@ -54,37 +54,37 @@ c = Cembalo(userSamplePath:"path/to/dir/")
 
 The traditional way to generate a meantone temperament (or any temperament based on fifths, for that matters) is by starting from the note D. This takes us around the circle of fiths like this:
 
-  Number of fifths from center   Note
-  ------------------------------ ------
-  6                              G\#
-  5                              C\#
-  4                              F\#
-  3                              B
-  2                              E
-  1                              A
-  0                              D
-  -1                             G
-  -2                             C
-  -3                             F
-  -4                             Bb
-  -5                             Eb
+| Number of fifths from center | Note |
+| --- | --- |
+| 6 | G\# |
+| 5 | C\# |
+| 4 | F\# |
+| 3 | B |
+| 2 | E |
+| 1 | A |
+| 0 | D |
+| -1 | G |
+| -2 | C |
+| -3 | F |
+| -4 | Bb |
+| -5 | Eb |
 
 If we express the note C as center, the table would look like this:
 
-  Number of fifths from center   Note
-  ------------------------------ ------
-  8                              G\#
-  7                              C\#
-  6                              F\#
-  5                              B
-  4                              E
-  3                              A
-  2                              D
-  1                              G
-  0                              C
-  -1                             F
-  -2                             Bb
-  -3                             Eb
+| Number of fifths from center | Note |
+| --- | --- |
+| 8 | G\# |
+| 7 | C\# |
+| 6 | F\# |
+| 5 | B |
+| 4 | E |
+| 3 | A |
+| 2 | D |
+| 1 | G |
+| 0 | C |
+| -1 | F |
+| -2 | Bb |
+| -3 | Eb |
 
 ...and that is how fifth-based scales are generated in `Cembalo`. 8 fifths up, 3 fifths down. If for example the note G would be considered as the root, we would only reach Bb going down and reach all the way to D\# going up.
 
