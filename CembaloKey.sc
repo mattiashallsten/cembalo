@@ -1,5 +1,6 @@
 CembaloKey {
-	var <nn, <output, outputL, outputR, amp, pan, attack, release, lagTime, <bodyBuffer, <releaseBuffer, parent;
+	var <nn, <output, outputL, outputR, amp, pan, attack, release, lagTime;
+	var <bodyBuffer, <releaseBuffer, <bodyindex, parent;
 	var <player, playerTimer, keyIsDepressed = false, sustainPedal = false;
 	var rate = 1, bendAm = 1, timbre = 0, compRate = 1;
 	var bodyLength;
@@ -17,6 +18,7 @@ CembaloKey {
 		, lagTime = 0.1
 		, bodyBuffer = 0
 		, releaseBuffer = 0
+		, bodyindex = 0
 		, parent = nil
 		|
 
@@ -32,6 +34,7 @@ CembaloKey {
 			lagTime,
 			bodyBuffer,
 			releaseBuffer,
+			bodyindex,
 			parent
 		).initCembaloKey;		
 	}
@@ -42,7 +45,7 @@ CembaloKey {
 	}
 
 	// * Instance method: keyOn
-	keyOn {|newRate, newAmp, newPan, newTimbre = 0, newAttack, newRelease, newOut|
+	keyOn {|newRate, newAmp, newPan, newTimbre = 0, newAttack, newRelease, newOut, newBodyIndex|
 		var out = newOut ? output;
 		var outL = newOut ? outputL;
 		var outR = outputR;
@@ -56,6 +59,7 @@ CembaloKey {
 		pan = newPan ? pan;
 		attack = newAttack ? attack;
 		release = newRelease ? release;
+		bodyindex = newBodyIndex ? bodyindex;
 		timbre = newTimbre;
 		
 		if(keyIsDepressed, {
@@ -166,7 +170,7 @@ CembaloKey {
 		adjusted_rate = (nn - sampleindex).midiratio;
 
 		// find a new buffer to use, at the index `sampleindex'.
-		bodyBuffer = parent.buffers[sampleindex][\body];
+		bodyBuffer = parent.buffers[sampleindex][\body].clipAt(bodyindex);
 
 		if(releaseBuffer.notNil,{
 			releaseBuffer = parent.buffers[sampleindex][\release];
@@ -202,6 +206,11 @@ CembaloKey {
 	// * Instance method: rate_
 	rate_ {|val|
 		rate = val;
+	}
+
+	// *** Instance method: bodyindex_
+	bodyindex_ {|val|
+		bodyindex = val
 	}
 
 	// * Instance method: amp_

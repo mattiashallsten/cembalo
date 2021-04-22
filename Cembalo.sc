@@ -2,7 +2,7 @@ Cembalo {
 	var <out, <tuning, <root, <concertA, <amp, <outputmapping, <mixToMono;
 	var userSamplePath, fillLostSamples, attack, release, lagTime;
 	var server, path;
-	var <buffers, configurationPath, <configuration;
+	var <buffers, configurationPath, <configuration, <bodyindex;
 	var <keys;
 	var rates, masterRate, transposedRates, acceptableTunings, <tuningType, bufferIndexOffset = 0;
 	var <midiNoteOffset = 24, <midiNoteCeil;
@@ -58,6 +58,7 @@ Cembalo {
 		outputmapping = this.outputMappingSetup(outputmapping);
 
 		buffers = Dictionary();
+		bodyindex = 0;
 
 		if(mixToMono, {
 			bodySynthdef = \cembalo_player_mix_to_mono;
@@ -122,8 +123,9 @@ Cembalo {
 					attack: attack,
 					release: release,
 					lagTime: lagTime,
-					bodyBuffer: item[\body],
+					bodyBuffer: item[\body][bodyindex],
 					releaseBuffer: item[\release],
+					bodyindex: bodyindex,
 					parent: this.value()
 				)
 			};
@@ -194,7 +196,7 @@ Cembalo {
 	}
 
 	// *** Instance method: keyOn
-	keyOn {|key = 60, pan = 0, amp = 0.7, rate, timbre=0, attack, release, out|
+	keyOn {|key = 60, pan = 0, amp = 0.7, rate, timbre=0, attack, release, out, bodyindex|
 
 		// This is how to interact with the `keyOn' method within the
 		// `CembaloKey' class on the lowest abstraction level. The method
@@ -206,7 +208,7 @@ Cembalo {
 			rate = transposedRates[(key) % 12];
 		});
 		if(keys[key].notNil, {
-			keys[key].keyOn(rate * masterRate, amp, pan, timbre, attack, release, out)
+			keys[key].keyOn(rate * masterRate, amp, pan, timbre, attack, release, out, bodyindex)
 		}, {
 			"MIDI note number % not available in current sample bank!\n".postf(key);
 		});
@@ -291,6 +293,7 @@ Cembalo {
 		, attack = 0
 		, release = 0
 		, out
+		, bodyindex = 0
 		|
 
 		// One level of abstraction up from `keyOn'. The user supplies a key,
@@ -317,7 +320,16 @@ Cembalo {
 				// the `keyOn' method checks if the rate is set to
 				// nil. if it is, it will do all the necessary
 				// transpositions for the different temperaments.
-				this.keyOn(key, pan, rate: rate, timbre: timbre, attack: attack, release: release, out: out);
+				this.keyOn(
+					key,
+					pan,
+					rate: rate,
+					timbre: timbre,
+					attack: attack,
+					release: release,
+					out: out,
+					bodyindex: bodyindex
+				);
 				
 				wait(localBendDelay - delay);
 
@@ -350,6 +362,7 @@ Cembalo {
 		, attack = 0
 		, release = 0
 		, out
+		, bodyindex = 0
 		|
 
 		// One level of abstraction up from `makeKeyEvent'. The user supplies
@@ -383,7 +396,8 @@ Cembalo {
 				bendAm: bendAm,
 				attack: attack[index % dur.size],
 				release: release[index % dur.size],
-				out: out
+				out: out,
+				bodyindex: bodyindex
 			)
 		}
 	}
@@ -401,6 +415,7 @@ Cembalo {
 		, attack
 		, release
 		, out
+		, bodyindex
 		|
 
 		// As with `playMIDINote': one level of abstraction higher than
@@ -453,7 +468,8 @@ Cembalo {
 				bendAm: bendAm,
 				attack: attack[index % dur.size],
 				release: release[index % dur.size],
-				out: out
+				out: out,
+				bodyindex: bodyindex
 				
 			)
 		}
@@ -623,7 +639,15 @@ Cembalo {
 		this.tuningSetup(tuning)
 	}
 
-
+	// *** Instance method: bodyindex_
+	bodyindex_{|newBodyIndex|
+		bodyindex = newBodyIndex.asInteger;
+		keys.do{|key|
+			if(key.notNil, {
+				key.bodyindex_(bodyindex)
+			})
+		};
+	}
 
 	// *** Instance method: amp_
 	amp_{|newAmp|
@@ -702,7 +726,8 @@ Cembalo {
 					bendAm: ~bendAm,
 					attack: ~attack,
 					release: ~release,
-					out: ~out
+					out: ~out,
+					bodyindex: ~bodyindex
 				);
 			}, {
 				~play = "You have to supply an instace of Cembalo".postln
@@ -714,7 +739,8 @@ Cembalo {
 			bendAm: 1,
 			attack: 0,
 			release: 0,
-			out: nil
+			out: nil,
+			bodyindex: 0
 		));
 		"Done.".postln;
 
@@ -732,7 +758,8 @@ Cembalo {
 					bendAm: ~bendAm,
 					attack: ~attack,
 					release: ~release,
-					out: ~out
+					out: ~out,
+					bodyindex: ~bodyindex
 				);
 			}, {
 				~play = "You have to supply an instace of Cembalo".postln
@@ -744,7 +771,8 @@ Cembalo {
 			bendAm: 1,
 			attack: 0,
 			release: 0,
-			out: nil
+			out: nil,
+			bodyindex: nil
 		));
 		"Done.".postln;
 	}
@@ -1230,7 +1258,11 @@ Cembalo {
 			var num = filePath.findRegexp(".{3}(?=.wav)")[0][1].compile.value();
 			var buffer = Buffer.read(server, filePath);
 
-			buffers[num] = Dictionary.newFrom([\nn, num, \body, buffer, \centOffset, 0]);
+			if(buffers[num] == nil, {
+				buffers[num] = Dictionary.newFrom([\nn, num, \body, [buffer], \centOffset, 0]);
+			}, {
+				buffers[num][\body] = buffers[num][\body] ++ buffer
+			});
 		};
 
 		releasePath.pathMatch.do{|filePath|
