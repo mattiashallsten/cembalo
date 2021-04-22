@@ -1,5 +1,5 @@
 CembaloKey {
-	var <nn, <output, outputL, outputR, amp, pan, attack, release, <bodyBuffer, <releaseBuffer, parent;
+	var <nn, <output, outputL, outputR, amp, pan, attack, release, lagTime, <bodyBuffer, <releaseBuffer, parent;
 	var <player, playerTimer, keyIsDepressed = false, sustainPedal = false;
 	var rate = 1, bendAm = 1, timbre = 0, compRate = 1;
 	var bodyLength;
@@ -14,6 +14,7 @@ CembaloKey {
 		, pan = 0
 		, attack = 0
 		, release = 0
+		, lagTime = 0.1
 		, bodyBuffer = 0
 		, releaseBuffer = 0
 		, parent = nil
@@ -28,6 +29,7 @@ CembaloKey {
 			pan,
 			attack,
 			release,
+			lagTime,
 			bodyBuffer,
 			releaseBuffer,
 			parent
@@ -73,7 +75,8 @@ CembaloKey {
 				\pan, pan,
 				\atk, attack,
 				\rel, release,
-				\amp, amp
+				\amp, amp,
+				\lagTime, lagTime
 			]);
 		}, {
 			player = Synth(parent.bodySynthdefMono, [
@@ -85,7 +88,8 @@ CembaloKey {
 				\pan, pan,
 				\atk, attack,
 				\rel, release,
-				\amp, amp
+				\amp, amp,
+				\lagTime, lagTime
 			]);
 		});
 			
@@ -185,6 +189,14 @@ CembaloKey {
 		if(player.notNil, {
 			player.set(\rate, rate * bendAm * compRate)
 		})
+	}
+
+	// *** Instance method: setLagTime
+	setLagTime {|val = 0.1|
+		lagTime = val;
+		if(player.notNil, {
+			player.set(\lagTime, lagTime)
+		});
 	}
 
 	// * Instance method: rate_

@@ -1,6 +1,6 @@
 Cembalo {
 	var <out, <tuning, <root, <concertA, <amp, <outputmapping, <mixToMono;
-	var userSamplePath, fillLostSamples, attack, release;
+	var userSamplePath, fillLostSamples, attack, release, lagTime;
 	var server, path;
 	var <buffers, configurationPath, <configuration;
 	var <keys;
@@ -23,6 +23,7 @@ Cembalo {
 		, fillLostSamples = false
 		, attack = 0
 		, release = 0
+		, lagTime = 0.1
 		|
 		
 		^super.newCopyArgs(
@@ -36,7 +37,8 @@ Cembalo {
 			userSamplePath,
 			fillLostSamples,
 			attack,
-			release
+			release,
+			lagTime
 			
 		).initCembalo;
 	}
@@ -119,6 +121,7 @@ Cembalo {
 					pan: 0,
 					attack: attack,
 					release: release,
+					lagTime: lagTime,
 					bodyBuffer: item[\body],
 					releaseBuffer: item[\release],
 					parent: this.value()
@@ -233,8 +236,15 @@ Cembalo {
 	bendKeyStep {|key = 0, num = 0|
 		var val;
 		key = key.clip(0,128);
+		num = num.round(1).asInteger;
 		val = (transposedRates.wrapAt(key + num) * num.midiratio) / (transposedRates.wrapAt(key));
 		if(keys[key].notNil, { keys[key].bend(val) } )
+	}
+
+	bendKeyStepAll {|num|
+		127.do{|index|
+			this.bendKeyStep(index, num)
+		}
 	}
 
 	// *** Instance method: bendKey
@@ -248,6 +258,22 @@ Cembalo {
 		keys.do{|item|
 			if(item.notNil, {
 				item.bend(val)
+			})
+		}
+	}
+
+	// // *** Instance method: lagTime_
+	// setLagTime {|val = 0.1|
+	// 	lagTime = val;
+	// 	keys.do{|item|
+	// 		item.setLagTime(lagTime)
+	// 	}
+	// }
+	setLagTime {|val = 0.1|
+		lagTime = val;
+		keys.do{|item|
+			if(item.notNil, {
+				item.setLagTime(lagTime)
 			})
 		}
 	}
@@ -1014,10 +1040,11 @@ Cembalo {
 			, amp = 1
 			, atk = 0
 			, rel = 0
+			, lagTime = 0.1
 			|
 
 			var env = EnvGen.kr(Env.asr(atk,1,rel), gate, doneAction:2);
-			var sig = PlayBuf.ar(2, buf, rate.lag() * BufRateScale.kr(buf)) * env;
+			var sig = PlayBuf.ar(2, buf, rate.lag(lagTime) * BufRateScale.kr(buf)) * env;
 
 			sig = Balance2.ar(sig[0], sig[1], pan);
 
@@ -1056,10 +1083,11 @@ Cembalo {
 			, amp = 1
 			, atk = 0
 			, rel = 0
+			, lagTime = 0.1
 			|
 
 			var env = EnvGen.kr(Env.asr(atk,1,rel), gate, doneAction:2);
-			var sig = PlayBuf.ar(1, buf, rate.lag() * BufRateScale.kr(buf)) * env;
+			var sig = PlayBuf.ar(1, buf, rate.lag(lagTime) * BufRateScale.kr(buf)) * env;
 
 			sig = Pan2.ar(sig, pan);
 
@@ -1097,10 +1125,11 @@ Cembalo {
 			, amp = 1
 			, atk = 0
 			, rel = 0
+			, lagTime = 0.1
 			|
 
 			var env = EnvGen.kr(Env.asr(atk,1,rel), gate, doneAction:2);
-			var sig = PlayBuf.ar(2, buf, rate.lag() * BufRateScale.kr(buf)) * env;
+			var sig = PlayBuf.ar(2, buf, rate.lag(lagTime) * BufRateScale.kr(buf)) * env;
 			
 			sig = Mix(sig);
 
@@ -1136,10 +1165,11 @@ Cembalo {
 			, amp = 1
 			, atk = 0
 			, rel = 0
+			, lagTime = 0.1
 			|
 
 			var env = EnvGen.kr(Env.asr(atk,1,rel), gate, doneAction:2);
-			var sig = PlayBuf.ar(1, buf, rate.lag() * BufRateScale.kr(buf)) * env;
+			var sig = PlayBuf.ar(1, buf, rate.lag(lagTime) * BufRateScale.kr(buf)) * env;
 
 			sig = sig * amp;
 
