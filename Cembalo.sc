@@ -1,5 +1,5 @@
 Cembalo {
-	var <out, <tuning, <root, <concertA, <amp, <outputmapping, <mixToMono;
+	var <out, <tuning, <root, <rootFreq, <amp, <outputmapping, <mixToMono;
 	var userSamplePath, fillLostSamples, attack, release, lagTime;
 	var server, path;
 	var <buffers, configurationPath, <configuration, <bodyindex;
@@ -15,7 +15,7 @@ Cembalo {
 		| out = 0
 		, tuning = \et12
 		, root = 0
-		, concertA = 440
+		, rootFreq = 440
 		, amp = 0.7
 		, outputmapping = 0
 		, mixToMono = false
@@ -30,7 +30,7 @@ Cembalo {
 			out,
 			tuning,
 			root,
-			concertA,
+			rootFreq,
 			amp,
 			outputmapping,
 			mixToMono,
@@ -653,7 +653,9 @@ Cembalo {
 	amp_{|newAmp|
 		amp = newAmp;
 		keys.do{|item|
-			item.amp_(amp)
+			if(item.notNil, {
+				item.amp_(amp)
+			})
 		};
 	}
 
@@ -829,9 +831,11 @@ Cembalo {
 		^scale
 	}
 
-	// *** Instance method: a_
-	concertA_ {|hertz|
-		concertA = hertz;
+	// *** Instance method: setRootFreq
+	setRootFreq {|hertz, index = 9|
+		var ratios = this.tuningAsArray;
+		var ratio = ratios[9] / ratios[index];
+		rootFreq = hertz * ratio;
 		this.adjustSampleOffset;
 	}
 
@@ -842,9 +846,9 @@ Cembalo {
 		var diff, sampleOffset;
 		var oldOffset;
 
-		"Adjusting sample offset using A=%...\n".postf(concertA);
+		"Adjusting sample offset using A=%...\n".postf(rootFreq);
 				
-		masterRate = (concertA / ratio) / concertC;
+		masterRate = (rootFreq / ratio) / concertC;
 
 		diff = masterRate.ratiomidi;
 		sampleOffset = diff.floor.asInteger;
@@ -919,17 +923,21 @@ Cembalo {
 					'et12', {rates = 1!12},
 					'mean', {
 						var scale = this.generateFifthBasedScale(1/4);
+						"Loading quarter-comma meantone tuning...".postln;
 						this.tuningSetup(scale);
 					},
 					'mean6', {
 						var scale = this.generateFifthBasedScale(1/6);
+						"Loading sixth-comma meantone tuning...".postln;
 						this.tuningSetup(scale);
 					},
 					'pyth', {
 						var scale = this.generateFifthBasedScale(0);
+						"Loading pythagorean tuning...".postln;
 						this.tuningSetup(scale)
 					},
 					'fivelimit', {
+						"Loading five-limit tuning...".postln;
 						this.tuningSetup([
 							1,
 							16/15,
@@ -946,6 +954,7 @@ Cembalo {
 						])
 					},
 					'sevenlimit', {
+						"Loading seven-limit tuning...".postln;
 						this.tuningSetup([
 							1,
 							16/15,
@@ -962,6 +971,7 @@ Cembalo {
 						])
 					},
 					'w3', {
+						"Loading werckminster III tuning...".postln;
 						this.tuningSetup([
 							1,
 							256/243,
