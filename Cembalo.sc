@@ -5,6 +5,7 @@ Cembalo {
 	var <buffers, configurationPath, <configuration, <bodyindex;
 	var <keys;
 	var rates, masterRate, transposedRates, acceptableTunings, <tuningType, bufferIndexOffset = 0;
+	var timbre = 0;
 	var <midiNoteOffset = 24, <midiNoteCeil;
 	var keyEventIndex;
 	var currentChord, chordOctave = 0;
@@ -91,13 +92,12 @@ Cembalo {
 			"Loading synthdefs...".postln;
 			this.loadSynthDefs;
 			"Done".postln;
+
 			"Loading buffers...".postln;
 			this.loadBuffers;
+			server.sync;
 			"Done".postln;
 
-			server.sync;
-
-			
 			this.adjustSampleOffset;
 
 			// Apply configuration to cent offsets
@@ -196,7 +196,7 @@ Cembalo {
 	}
 
 	// *** Instance method: keyOn
-	keyOn {|key = 60, pan = 0, amp = 0.7, rate, timbre=0, attack, release, out, bodyindex|
+	keyOn {|key = 60, pan = 0, amp = 0.7, rate, newTimbre, attack, release, out, bodyindex|
 
 		// This is how to interact with the `keyOn' method within the
 		// `CembaloKey' class on the lowest abstraction level. The method
@@ -207,8 +207,13 @@ Cembalo {
 		if(rate == nil, {
 			rate = transposedRates[(key) % 12];
 		});
+
+		if(newTimbre == nil, {
+			newTimbre = timbre
+		});
+		
 		if(keys[key].notNil, {
-			keys[key].keyOn(rate * masterRate, amp, pan, timbre, attack, release, out, bodyindex)
+			keys[key].keyOn(rate * masterRate, amp, pan, newTimbre, attack, release, out, bodyindex)
 		}, {
 			"MIDI note number % not available in current sample bank!\n".postf(key);
 		});
@@ -287,19 +292,23 @@ Cembalo {
 		, delay = 0
 		, pan = 0
 		, rate
-		, timbre = 0
+		, timbre
 		, bendDelay = 1
 		, bendAm = 1
-		, attack = 0
-		, release = 0
-		, out
-		, bodyindex = 0
+		, newAttack
+		, newRelease
+		, newOut
+		, newBodyindex
 		|
 
 		// One level of abstraction up from `keyOn'. The user supplies a key,
 		// a duration, a delay value, a pan value. If the key should be
 		// fine-tuned the user can also supply a rate value, if not the
 		// `keyOn' method adheres to the selected temperament.
+
+		newAttack = newAttack ? attack;
+		newRelease = newRelease ? release;
+		newBodyindex = newBodyindex ? bodyindex;
 		
 		key = key.clip(0,128);
 		if(keys[key].notNil, {
@@ -324,11 +333,11 @@ Cembalo {
 					key,
 					pan,
 					rate: rate,
-					timbre: timbre,
-					attack: attack,
-					release: release,
-					out: out,
-					bodyindex: bodyindex
+					newTimbre: timbre,
+					attack: newAttack,
+					release: newRelease,
+					out: newOut,
+					bodyindex: newBodyindex
 				);
 				
 				wait(localBendDelay - delay);
@@ -340,7 +349,7 @@ Cembalo {
 				wait(dur - delay - localBendDelay);
 
 				if(keyEventIndex[key] - 1 == localIndex, {
-					this.keyOff(key, out: out)
+					this.keyOff(key, out: newOut)
 				})
 			}
 		}, {
@@ -354,15 +363,15 @@ Cembalo {
 		| note = 60
 		, dur = 4
 		, pan = 0
-		, timbre = 0
+		, timbre
 		, strum = 0
 		, randomStrum = false
 		, bendDelay = 0
 		, bendAm = 1
-		, attack = 0
-		, release = 0
+		, attack
+		, release
 		, out
-		, bodyindex = 0
+		, bodyindex
 		|
 
 		// One level of abstraction up from `makeKeyEvent'. The user supplies
@@ -382,8 +391,17 @@ Cembalo {
 		pan = pan.asArray;
 		dur = dur.asArray;
 
-		attack = attack.asArray;
-		release = release.asArray;
+		if(attack.notNil, {
+			attack = attack.asArray
+		}, {
+			attack = [nil]
+		});
+
+		if(release.notNil, {
+			release = release.asArray
+		}, {
+			release = [nil]
+		});
 
 		key.do{|item, index|
 			this.makeKeyEvent(
@@ -394,10 +412,10 @@ Cembalo {
 				timbre: timbre,
 				bendDelay: bendDelay,
 				bendAm: bendAm,
-				attack: attack[index % dur.size],
-				release: release[index % dur.size],
-				out: out,
-				bodyindex: bodyindex
+				newAttack: attack[index % dur.size],
+				newRelease: release[index % dur.size],
+				newOut: out,
+				newBodyindex: bodyindex
 			)
 		}
 	}
@@ -407,7 +425,7 @@ Cembalo {
 		| freq = 440
 		, dur = 4
 		, pan = 0
-		, timbre = 0
+		, timbre
 		, strum = 0
 		, randomStrum = false
 		, bendDelay = 1
@@ -451,10 +469,17 @@ Cembalo {
 		pan = pan.asArray;
 		dur = dur.asArray;
 
-		attack = attack ? [0];
-		attack = attack.asArray;
-		release = release ? [0];
-		release = release.asArray;
+		if(attack.notNil, {
+			attack = attack.asArray
+		}, {
+			attack = [nil]
+		});
+
+		if(release.notNil, {
+			release = release.asArray
+		}, {
+			release = [nil]
+		});
 
 		key.do{|item, index|
 			this.makeKeyEvent(
@@ -466,10 +491,10 @@ Cembalo {
 				timbre: timbre,
 				bendDelay: bendDelay,
 				bendAm: bendAm,
-				attack: attack[index % dur.size],
-				release: release[index % dur.size],
-				out: out,
-				bodyindex: bodyindex
+				newAttack: attack[index % dur.size],
+				newRelease: release[index % dur.size],
+				newOut: out,
+				newBodyindex: bodyindex
 				
 			)
 		}
@@ -647,6 +672,11 @@ Cembalo {
 				key.bodyindex_(bodyindex)
 			})
 		};
+	}
+
+	// *** Instance method: timbre_
+	timbre_{|newTimbre|
+		timbre = newTimbre
 	}
 
 	// *** Instance method: amp_
@@ -833,21 +863,25 @@ Cembalo {
 
 	// *** Instance method: setRootFreq
 	setRootFreq {|hertz, index = 9|
-		var ratios = this.tuningAsArray;
-		var ratio = ratios[9] / ratios[index];
+		var ratios, ratio;
+
+		index = index ? 9;
+		
+		ratios = this.tuningAsArray;
+		ratio = ratios[9] / ratios[index];
 		rootFreq = hertz * ratio;
 		this.adjustSampleOffset;
 	}
 
 	// *** Instance method: adjustSampleOffset
 	adjustSampleOffset {
-		var ratio = this.tuningAsArray[9];
+		var ratio = this.tuningAsArray()[9];
 		var concertC = 440 / 9.midiratio;
 		var diff, sampleOffset;
 		var oldOffset;
 
 		"Adjusting sample offset using A=%...\n".postf(rootFreq);
-				
+						
 		masterRate = (rootFreq / ratio) / concertC;
 
 		diff = masterRate.ratiomidi;
@@ -875,10 +909,12 @@ Cembalo {
 	}
 	
 	// *** Instance method: tuning_
-	tuning_{|newTuning, type="t"|
+	tuning_{|newTuning, rootFreq, rootFreqIndex|
 		tuning = newTuning;
-		tuningType = type;
 		this.tuningSetup(tuning);
+		if(rootFreq.notNil, {
+			this.setRootFreq(rootFreq, rootFreqIndex)
+		})
 	}
 
 	// *** Instance method: tuningSetup
@@ -901,19 +937,15 @@ Cembalo {
 					};
 				});
 			});
-			fork {
-				rates = tuning.collect{|item, index|
-					if(index == 0, {
-						1
-					}, {
-						item / index.midiratio
-					})
-				};
 
-				wait(0.5);
-				
-				this.adjustSampleOffset();
-			}
+			rates = tuning.collect{|item, index|
+				if(index == 0, {
+					1
+				}, {
+					item / index.midiratio
+				})
+			};
+
 		}, {
 			if(tuning.isNumber, {
 				var scale = this.generateFifthBasedScale(tuning);
@@ -994,8 +1026,8 @@ Cembalo {
 				)
 			})
 		});
-
 		transposedRates = rates.rotate(root % 12);
+		this.adjustSampleOffset();
 	}
 
 	// *** Instance method: tuningAsArray
@@ -1003,6 +1035,15 @@ Cembalo {
 		^transposedRates.collect{|item, index|
 			index.midiratio * item
 		};
+	}
+
+	// *** Instance method: getKeyFreq
+	getKeyFreq {|key = 0|
+		var octave = 2.pow(key.div(12) - 69.div(12));
+		var ratios = this.tuningAsArray();
+		var ratio = ratios[key % ratios.size] / ratios[9];
+
+		^rootFreq * ratio * octave
 	}
 
 	// *** Instance method: arrayContains
@@ -1281,6 +1322,21 @@ Cembalo {
 
 			buffers[num][\release] = buffer;
 		};
+	}
+
+	// *** Instance method: getNumBuffers
+	getNumBuffers {
+		var num = 0;
+		buffers.do{|item|
+			if(item.notNil, {
+				num = num + item[\body].size;
+				if(item[\release].notNil, {
+					num = num + 1
+				})
+			})
+		};
+
+		^num;
 	}
 }
 // Local Variables:
