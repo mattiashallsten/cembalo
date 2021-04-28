@@ -97,6 +97,7 @@ Cembalo {
 			this.loadBuffers;
 			server.sync;
 			"Done".postln;
+			"Number of buffers: %\n".postf(this.getNumBuffers());
 
 			this.adjustSampleOffset;
 
@@ -918,27 +919,28 @@ Cembalo {
 	}
 
 	// *** Instance method: tuningSetup
-	tuningSetup {|tuning|
-		if(tuning.isArray, {
-			var len = tuning.size;
+	tuningSetup {|newTuning|
+		tuning = newTuning;
+		if(newTuning.isArray, {
+			var len = newTuning.size;
 
 			if(len < 12, {
 				var diff = 12 - len;
 				"not enough ratios: adding % 2".format(diff).postln;
 				diff.do{
-					tuning = tuning.add(2);
+					newTuning = newTuning.add(2);
 				}
 			}, {
 				if(len > 12, {
 					var diff = len - 12;
 					"too many ratios! removing % ratios".format(diff).postln;
 					diff.do{|index|
-						tuning.removeAt(len - index - 1)
+						newTuning.removeAt(len - index - 1)
 					};
 				});
 			});
 
-			rates = tuning.collect{|item, index|
+			rates = newTuning.collect{|item, index|
 				if(index == 0, {
 					1
 				}, {
@@ -947,12 +949,18 @@ Cembalo {
 			};
 
 		}, {
-			if(tuning.isNumber, {
-				var scale = this.generateFifthBasedScale(tuning);
+			if(newTuning.isNumber, {
+				var scale = this.generateFifthBasedScale(newTuning);
 				this.tuningSetup(scale);
 			}, {
-				switch(tuning,
-					'et12', {rates = 1!12},
+				switch(newTuning,
+					'et12', {
+						var scale = 12.collect{|i|
+							2.pow(i / 12)
+						};
+						"Loading 12-tone equal temperament tuning...".postln;
+						this.tuningSetup(scale);
+					},
 					'mean', {
 						var scale = this.generateFifthBasedScale(1/4);
 						"Loading quarter-comma meantone tuning...".postln;
@@ -1020,14 +1028,19 @@ Cembalo {
 						])
 					},
 					{
-						"Tuning % not found! Using default et12.\n".postf(tuning);
-						rates = 1!12
+						"Tuning % not found! Using default et12.\n".postf(newTuning);
+						this.tuningSetup('et12');
 					}
 				)
 			})
 		});
 		transposedRates = rates.rotate(root % 12);
 		this.adjustSampleOffset();
+	}
+
+	setTuningPerKey {|index = 0, ratio = 1|
+		tuning[index % tuning.size] = ratio;
+		this.tuningSetup(tuning);
 	}
 
 	// *** Instance method: tuningAsArray
