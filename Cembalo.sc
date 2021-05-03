@@ -10,6 +10,7 @@ Cembalo {
 	var keyEventIndex;
 	var currentChord, chordOctave = 0;
 	var <bodySynthdef, <releaseSynthdef, <bodySynthdefMono, <releaseSynthdefMono;
+	var buffersOnServer;
 
 	// *** Class method: new
 	*new {
@@ -61,6 +62,8 @@ Cembalo {
 		buffers = Dictionary();
 		bodyindex = 0;
 
+
+
 		if(mixToMono, {
 			bodySynthdef = \cembalo_player_mix_to_mono;
 			releaseSynthdef = \cembalo_player_oneshot_mix_to_mono;
@@ -88,7 +91,14 @@ Cembalo {
 
 		server.waitForBoot{
 			"Server booted.".postln;
-			
+			buffersOnServer = [];
+			"Running query on server, finding buffers that are already loaded...".postln;
+			// With help from David Granström
+			server.cachedBuffersDo{|buf|
+				buffersOnServer = buffersOnServer.add(buf)
+			};
+			server.sync;
+			"Done.".postln;
 			"Loading synthdefs...".postln;
 			this.loadSynthDefs;
 			"Done".postln;
@@ -1361,7 +1371,7 @@ Cembalo {
 
 		bodyPath.pathMatch.do{|filePath|
 			var num = filePath.findRegexp(".{3}(?=.wav)")[0][1].compile.value();
-			var buffer = Buffer.read(server, filePath);
+			var buffer = this.cembaloLoadBuffer(filePath);
 
 			if(buffers[num] == nil, {
 				buffers[num] = Dictionary.newFrom([\nn, num, \body, [buffer], \centOffset, 0]);
@@ -1372,10 +1382,21 @@ Cembalo {
 
 		releasePath.pathMatch.do{|filePath|
 			var num = filePath.findRegexp(".{3}(?=.wav)")[0][1].compile.value();
-			var buffer = Buffer.read(server, filePath);
+			var buffer = this.cembaloLoadBuffer(filePath);
 
 			buffers[num][\release] = buffer;
 		};
+	}
+
+	/// *** Instance method: cembaloLoadBuffer
+	cembaloLoadBuffer {|path|
+		// With help from David Granström
+		buffersOnServer.do{|buf|
+			if(path == buf.path, {
+				^buf
+			})
+		};
+		^Buffer.read(server, path)
 	}
 
 	// *** Instance method: getNumBuffers
