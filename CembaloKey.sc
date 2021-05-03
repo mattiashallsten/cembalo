@@ -2,7 +2,7 @@ CembaloKey {
 	var <nn, <output, outputL, outputR, amp, pan, attack, release, lagTime;
 	var <bodyBuffer, <releaseBuffer, <bodyindex, parent;
 	var <player, playerTimer, keyIsDepressed = false, sustainPedal = false;
-	var rate = 1, bendAm = 1, timbre = 0, compRate = 1;
+	var rate = 1, bendAm = 1, timbre = 0, compRate = 1, freq = 20;
 	var bodyLength;
 
 	// * Class method: *new
@@ -45,7 +45,7 @@ CembaloKey {
 	}
 
 	// * Instance method: keyOn
-	keyOn {|newRate, newAmp, newPan, newTimbre = 0, newAttack, newRelease, newOut, newBodyIndex|
+	keyOn {|newRate, newAmp, newPan, newTimbre = 0, newAttack, newRelease, newOut, newBodyindex|
 		var out = newOut ? output;
 		var outL = newOut ? outputL;
 		var outR = outputR;
@@ -57,17 +57,21 @@ CembaloKey {
 		rate = newRate ? rate;
 		amp = newAmp ? amp;
 		pan = newPan ? pan;
-		attack = newAttack ? attack;
-		release = newRelease ? release;
-		bodyindex = newBodyIndex ? bodyindex;
-		timbre = newTimbre;
+		newAttack = newAttack ? attack;
+		newRelease = newRelease ? release;
+		if(newRelease < 0.1, { newRelease = 0.1 });
+		newBodyindex = newBodyindex ? bodyindex;
+		newTimbre = newTimbre ? timbre;
 		
 		if(keyIsDepressed, {
 			this.keyOff(newOut);
 		});
 
 		// make adjustments in playback rate (set value of compRate)
-		this.adjustRate;
+		this.adjustRate(newTimbre);
+
+		freq = nn.midicps * rate * compRate;
+		"HPF Cutoff: %\n".postf((freq / 2).round(0.01));
 		
 		if(bodyBuffer.numChannels == 2, {
 			player = Synth(parent.bodySynthdef, [
@@ -77,10 +81,11 @@ CembaloKey {
 				\outR, outR,
 				\rate, rate * bendAm * compRate,
 				\pan, pan,
-				\atk, attack,
-				\rel, release,
+				\atk, newAttack,
+				\rel, newRelease,
 				\amp, amp,
-				\lagTime, lagTime
+				\lagTime, lagTime,
+				\hpfCutoff, freq / 2
 			]);
 		}, {
 			player = Synth(parent.bodySynthdefMono, [
@@ -90,10 +95,11 @@ CembaloKey {
 				\outR, outR,
 				\rate, rate * bendAm * compRate,
 				\pan, pan,
-				\atk, attack,
-				\rel, release,
+				\atk, newAttack,
+				\rel, newRelease,
 				\amp, amp,
-				\lagTime, lagTime
+				\lagTime, lagTime,
+				\hpfCutoff, freq / 2
 			]);
 		});
 			
@@ -104,8 +110,10 @@ CembaloKey {
 	}
 	
 	// * Instance method: keyOff
-	keyOff {|newOut|
+	keyOff {|newOut, newRelease|
 		var out, outL, outR;
+
+		newRelease = newRelease ? release;
 
 		if(newOut.notNil, {
 			out = newOut;
@@ -125,7 +133,7 @@ CembaloKey {
 				player = nil;
 			});
 
-			if((releaseBuffer.notNil) && (release == 0), {
+			if((releaseBuffer.notNil) && (newRelease == 0), {
 				if(releaseBuffer.numChannels == 2, {
 					Synth(parent.releaseSynthdef, [
 						\buf, releaseBuffer,
@@ -134,7 +142,8 @@ CembaloKey {
 						\outR, outR,
 						\rate, rate * bendAm * compRate,
 						\pan, pan,
-						\amp, amp
+						\amp, amp,
+						\hpfCutoff, freq / 2
 					]);
 				}, {
 					Synth(parent.releaseSynthdefMono, [
@@ -144,7 +153,8 @@ CembaloKey {
 						\outR, outR,
 						\rate, rate * bendAm * compRate,
 						\pan, pan,
-						\amp, amp
+						\amp, amp,
+						\hpfCutoff, freq / 2
 					]);
 				});
 			});
@@ -156,7 +166,7 @@ CembaloKey {
 	}	
 	
 	// * Instance method: adjustRate
-	adjustRate {
+	adjustRate {|timbre = 0|
 		var sampleindex, adjusted_rate, buffer_cent_offset;
 		// remap timbre value to -32 <-> 32. `sampleindex' will be the
 		// sample to use for playback.
@@ -203,7 +213,7 @@ CembaloKey {
 		});
 	}
 
-	// * Instance method: rate_
+	// *** Instance method: rate_
 	rate_ {|val|
 		rate = val;
 	}
@@ -213,15 +223,21 @@ CembaloKey {
 		bodyindex = val
 	}
 
-	// * Instance method: amp_
+	// *** Instance method: amp_
 	amp_ {|val|
 		amp = val
 	}
 
 	output_ {|val|
 		output = val.div(1);
+	}
+
+	outputL_ {|val|
 		outputL = val.div(1);
-		outputR = val.div(1) + 1;
+	}
+
+	outputR_ {|val|
+		outputR = val.div(1);
 	}
 
 	// *** Instance method: attack_

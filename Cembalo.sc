@@ -214,17 +214,25 @@ Cembalo {
 		});
 		
 		if(keys[key].notNil, {
-			keys[key].keyOn(rate * masterRate, amp, pan, newTimbre, attack, release, out, bodyindex)
+			keys[key].keyOn(
+				newRate: rate * masterRate,
+				newAmp: amp,
+				newPan: pan,
+				newTimbre: newTimbre,
+				newAttack: attack,
+				newRelease: release,
+				newOut: out,
+				newBodyindex: bodyindex)
 		}, {
 			"MIDI note number % not available in current sample bank!\n".postf(key);
 		});
 	}
 
 	// *** Instance method: keyOff
-	keyOff {|key = 60, pan = 0, amp = 0.7, out|
+	keyOff {|key = 60, pan = 0, amp = 0.7, out, release|
 		key = key.clip(0,127);
 		if(keys[key].notNil, {
-			keys[key].keyOff(out)
+			keys[key].keyOff(out, newRelease: release)
 		}, {
 			"MIDI note number % not available in current sample bank!\n".postf(key);
 		});
@@ -741,6 +749,23 @@ Cembalo {
 		^newArray
 	}
 
+	// *** Instance method: outputmapping_
+	outputmapping_ {|array|
+		outputmapping = this.outputMappingSetup(array);
+
+		buffers.do{|item|
+			var nn = item[\nn];
+
+			var output = outputmapping[nn%outputmapping.size];
+
+			keys[nn].output_(output[0]);
+			keys[nn].outputL_(output[0]);
+			keys[nn].outputR_(output[1]);
+		};
+
+		"Output mapping:\n%\n".postf(outputmapping);
+	}
+
 	// *** Instance method: eventTypeSetup
 	eventTypeSetup {
 		Event.removeEventType(\cembalo);
@@ -1133,12 +1158,14 @@ Cembalo {
 			, atk = 0
 			, rel = 0
 			, lagTime = 0.1
+			, hpfCutoff = 20
 			|
 
 			var env = EnvGen.kr(Env.asr(atk,1,rel), gate, doneAction:2);
 			var sig = PlayBuf.ar(2, buf, rate.lag(lagTime) * BufRateScale.kr(buf)) * env;
 
 			sig = Balance2.ar(sig[0], sig[1], pan);
+			sig = HPF.ar(sig, hpfCutoff);
 
 			sig = sig * amp;
 
@@ -1154,10 +1181,12 @@ Cembalo {
 			, rate = 1
 			, pan = 0
 			, amp 1
+			, hpfCutoff = 20
 			|
 
 			var sig = PlayBuf.ar(2, buf, rate, doneAction:2);
 			sig = Balance2.ar(sig[0], sig[1], pan);
+			sig = HPF.ar(sig, hpfCutoff);
 			sig = sig * amp;
 
 			Out.ar(outL, sig[0]);
@@ -1176,12 +1205,15 @@ Cembalo {
 			, atk = 0
 			, rel = 0
 			, lagTime = 0.1
+			, hpfCutoff = 20
 			|
 
 			var env = EnvGen.kr(Env.asr(atk,1,rel), gate, doneAction:2);
 			var sig = PlayBuf.ar(1, buf, rate.lag(lagTime) * BufRateScale.kr(buf)) * env;
+			sig = HPF.ar(sig, hpfCutoff);
 
 			sig = Pan2.ar(sig, pan);
+
 
 			sig = sig * amp;
 
@@ -1197,9 +1229,11 @@ Cembalo {
 			, rate = 1
 			, pan = 0
 			, amp 1
+			, hpfCutoff = 20
 			|
 
 			var sig = PlayBuf.ar(1, buf, rate, doneAction:2);
+			sig = HPF.ar(sig, hpfCutoff);
 			sig = Pan2.ar(sig, pan);
 			sig = sig * amp;
 
@@ -1218,12 +1252,14 @@ Cembalo {
 			, atk = 0
 			, rel = 0
 			, lagTime = 0.1
+			, hpfCutoff = 20
 			|
 
 			var env = EnvGen.kr(Env.asr(atk,1,rel), gate, doneAction:2);
 			var sig = PlayBuf.ar(2, buf, rate.lag(lagTime) * BufRateScale.kr(buf)) * env;
 			
 			sig = Mix(sig);
+			sig = HPF.ar(sig, hpfCutoff);
 
 			sig = sig * amp;
 
@@ -1236,12 +1272,15 @@ Cembalo {
 			, out = 0
 			, rate = 1
 			, pan = 0
-			, amp 1
+			, amp = 1
+			, hpfCutoff = 20
 			|
 
 			var sig = PlayBuf.ar(2, buf, rate, doneAction:2);
 			
 			sig = Mix(sig);
+			sig = HPF.ar(sig, hpfCutoff);
+			
 			sig = sig * amp;
 
 			Out.ar(out, sig)
@@ -1258,11 +1297,12 @@ Cembalo {
 			, atk = 0
 			, rel = 0
 			, lagTime = 0.1
+			, hpfCutoff = 20
 			|
 
 			var env = EnvGen.kr(Env.asr(atk,1,rel), gate, doneAction:2);
 			var sig = PlayBuf.ar(1, buf, rate.lag(lagTime) * BufRateScale.kr(buf)) * env;
-
+			sig = HPF.ar(sig, hpfCutoff);
 			sig = sig * amp;
 
 			Out.ar(out, sig)
@@ -1274,11 +1314,12 @@ Cembalo {
 			, out = 0
 			, rate = 1
 			, pan = 0
-			, amp 1
+			, amp = 1
+			, hpfCutoff = 20
 			|
 
 			var sig = PlayBuf.ar(1, buf, rate, doneAction:2);
-			
+			sig = HPF.ar(sig, hpfCutoff);
 			sig = sig * amp;
 
 			Out.ar(out, sig)
