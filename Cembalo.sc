@@ -1,68 +1,92 @@
 Cembalo {
-	var <out, <tuning, <root, <rootFreq, <amp, <outputmapping, <mixToMono;
-	var userSamplePath, fillLostSamples, attack, release, lagTime;
-	var server, path;
-	var <buffers, configurationPath, <configuration, <bodyindex;
-	var <keys;
-	var rates, masterRate, transposedRates, acceptableTunings, <tuningType, bufferIndexOffset = 0;
-	var timbre = 0;
-	var <midiNoteOffset = 24, <midiNoteCeil;
-	var keyEventIndex;
-	var currentChord, chordOctave = 0;
-	var <bodySynthdef, <releaseSynthdef, <bodySynthdefMono, <releaseSynthdefMono;
+	// Timbral parameters
+	var gTimbre = 0, gPan = 0, <gBodyindex = 0, <gAmp, gAttack, gRelease, lagTime;
+	var <gOut, <outputmapping;
+
+	// System variables
+	var server, path, userSamplePath, fillLostSamples, configurationPath, <configuration;
 	var buffersOnServer;
+	var <bodySynthdef, <releaseSynthdef, <bodySynthdefMono, <releaseSynthdefMono;
+
+	// Tuning variables
+	var <tuning, <root, <rootFreq;
+	var rates, masterRate, <transposedRates, <tuningType, bufferIndexOffset = 0;
+	var <midiNoteOffset = 24, <midiNoteCeil;
+
+	// Buffer variables
+	var <buffers;
+
+	// Playing variables
+	var <keys;
+	var currentChord;
+	var keyEventIndex;
 
 	// *** Class method: new
 	*new {
 		| out = 0
 		, tuning = \et12
-		, root = 0
-		, rootFreq = 440
 		, amp = 0.7
 		, outputmapping = 0
 		, mixToMono = false
 		, userSamplePath = nil
 		, fillLostSamples = false
-		, attack = 0
-		, release = 0
-		, lagTime = 0.1
+		, onLoad = nil
 		|
 		
-		^super.newCopyArgs(
+		^super.new.initCembalo(
 			out,
 			tuning,
-			root,
-			rootFreq,
 			amp,
 			outputmapping,
 			mixToMono,
 			userSamplePath,
 			fillLostSamples,
-			attack,
-			release,
-			lagTime
-			
-		).initCembalo;
+			onLoad
+		);
 	}
 
 	// *** Instance method: initCembalo
 	initCembalo {
+		| out
+		, iTuning
+		, amp
+		, iOutputmapping
+		, mixToMono
+		, iUserSamplePath
+		, fillLostSamples
+		, onLoad
+		|
 		"            =============".postln;
 		"            == Cembalo ==".postln;
 		"            =============".postln;
+		gOut = out;
+		tuning = iTuning;
+		root = 0;
+		rootFreq = 440;
+		gAmp = amp;
+		outputmapping = iOutputmapping;
+		userSamplePath = iUserSamplePath;
+
+		if(userSamplePath.notNil, {
+			if(userSamplePath[userSamplePath.size - 1] != "/", {
+				userSamplePath = userSamplePath ++ "/"
+			});
+		});
+		
+		//fillLostSamples = iFillLostSamples;
+		gAttack = 0;
+		gRelease = 0;
+		lagTime = 0.1;	
+		
 		server = Server.local;
 		path = Platform.userExtensionDir ++ "/cembalo/";
 
-		acceptableTunings = ['et12', 'fivelimit', 'sevenlimit', 'pyth', 'mean'];
 		rates = 1!12;
 		masterRate = 1;
 
 		outputmapping = this.outputMappingSetup(outputmapping);
 
 		buffers = Dictionary();
-		bodyindex = 0;
-
-
 
 		if(mixToMono, {
 			bodySynthdef = \cembalo_player_mix_to_mono;
@@ -78,7 +102,7 @@ Cembalo {
 
 		// Initialize scaleType variable -- will be set in tuningSetup
 		"Setting up tuning...".postln;
-		this.tuning_(tuning);
+		this.setTuning(iTuning, rootFreq, 9);
 		"Done.".postln;
 
 		keys = nil!128;
@@ -91,6 +115,7 @@ Cembalo {
 
 		server.waitForBoot{
 			"Server booted.".postln;
+
 			buffersOnServer = [];
 			"Running query on server, finding buffers that are already loaded...".postln;
 			// With help from David Granström
@@ -99,6 +124,7 @@ Cembalo {
 			};
 			server.sync;
 			"Done.".postln;
+
 			"Loading synthdefs...".postln;
 			this.loadSynthDefs;
 			"Done".postln;
@@ -129,14 +155,14 @@ Cembalo {
 					out: output[0],
 					outL: output[0],
 					outR: output[1],
-					amp: amp,
+					amp: gAmp,
 					pan: 0,
-					attack: attack,
-					release: release,
+					attack: gAttack,
+					release: gRelease,
 					lagTime: lagTime,
-					bodyBuffer: item[\body][bodyindex],
+					bodyBuffer: item[\body][gBodyindex],
 					releaseBuffer: item[\release],
-					bodyindex: bodyindex,
+					bodyindex: gBodyindex,
 					parent: this.value()
 				)
 			};
@@ -152,18 +178,19 @@ Cembalo {
 						var output = outputmapping[nn%outputmapping.size];
 						var sampleindex = this.findClosestSample(nn);
 
-						"creating new key with note number % using sample %\n".postf(nn, sampleindex);
+						"creating new key with note number % using sample %\n".postf(
+							nn, sampleindex);
 						
 						keys[nn] = CembaloKey(
 							nn: nn,
 							out: output[0],
 							outL: output[0],
 							outR: output[1],
-							amp: amp,
+							amp: gAmp,
 							pan: 0,
-							attack: attack,
-							release: release,
-							bodyBuffer: buffers[sampleindex][\body],
+							attack: gAttack,
+							release: gRelease,
+							bodyBuffer: buffers[sampleindex][\body][gBodyindex],
 							releaseBuffer: buffers[sampleindex][\release],
 							parent: this.value()
 						);
@@ -175,6 +202,10 @@ Cembalo {
 
 			this.eventTypeSetup;
 
+			if(onLoad.class == Function, {
+				onLoad.value(this)
+			});
+			
 			"Cembalo loaded.".postln;
 		}
 	}
@@ -207,42 +238,51 @@ Cembalo {
 	}
 
 	// *** Instance method: keyOn
-	keyOn {|key = 60, pan = 0, amp = 0.7, rate, newTimbre, attack, release, out, bodyindex|
-
+	keyOn {|key = 60, pan = 0, amp, rate, timbre, attack, release, out, bodyindex|
 		// This is how to interact with the `keyOn' method within the
 		// `CembaloKey' class on the lowest abstraction level. The method
 		// `makeKeyEvet' interfaces with this method.
 
 		key = key.clip(0,127);
-		
-		if(rate == nil, {
-			rate = transposedRates[(key) % 12];
-		});
+		pan = pan ? gPan;
+		amp = amp ? gAmp;
+		timbre = timbre ? gTimbre;
+		attack = attack ? gAttack;
+		release = release ? gRelease;
+		out = out ? outputmapping[key % 12];
+		bodyindex = bodyindex ? gBodyindex;
 
-		if(newTimbre == nil, {
-			newTimbre = timbre
-		});
+		rate = rate ? transposedRates[key % 12] * masterRate;
 		
 		if(keys[key].notNil, {
 			keys[key].keyOn(
-				newRate: rate * masterRate,
+				newRate: rate,
 				newAmp: amp,
 				newPan: pan,
-				newTimbre: newTimbre,
+				newTimbre: timbre,
 				newAttack: attack,
 				newRelease: release,
 				newOut: out,
-				newBodyindex: bodyindex)
+				newBodyindex: bodyindex
+			)
 		}, {
 			"MIDI note number % not available in current sample bank!\n".postf(key);
 		});
 	}
 
 	// *** Instance method: keyOff
-	keyOff {|key = 60, pan = 0, amp = 0.7, out, release|
+	keyOff {|key = 60, pan = 0, amp = 0.7, out, release, rate|
+
 		key = key.clip(0,127);
+		rate = rate ? transposedRates[key % 12] * masterRate;
+
+		release = release ? gRelease;
+		out = out ? outputmapping[key % 12];
+		amp = amp ? gAmp;
+		pan = pan ? gPan;
+
 		if(keys[key].notNil, {
-			keys[key].keyOff(out, newRelease: release)
+			keys[key].keyOff(rate, out, newRelease: release)
 		}, {
 			"MIDI note number % not available in current sample bank!\n".postf(key);
 		});
@@ -305,19 +345,17 @@ Cembalo {
 	}
 
 	// *** Instance method: makeKeyEvent
-	makeKeyEvent {|
-		key = 60
+	makeKeyEvent {
+		| key = 60
 		, dur = 4
 		, delay = 0
 		, pan = 0
 		, rate
 		, timbre
-		, bendDelay = 1
-		, bendAm = 1
-		, newAttack
-		, newRelease
-		, newOut
-		, newBodyindex
+		, attack
+		, release
+		, out
+		, bodyindex
 		|
 
 		// One level of abstraction up from `keyOn'. The user supplies a key,
@@ -325,10 +363,10 @@ Cembalo {
 		// fine-tuned the user can also supply a rate value, if not the
 		// `keyOn' method adheres to the selected temperament.
 
-		newAttack = newAttack ? attack;
-		newRelease = newRelease ? release;
-		newBodyindex = newBodyindex ? bodyindex;
-		
+		attack = attack ? gAttack;
+		release = release ? gRelease;
+		bodyindex = bodyindex ? gBodyindex;
+
 		key = key.clip(0,128);
 		if(keys[key].notNil, {
 			fork {
@@ -339,8 +377,7 @@ Cembalo {
 				// increases by one.
 				
 				var localIndex = keyEventIndex[key].copy;
-				var localBendDelay = dur * bendDelay;
-
+				
 				keyEventIndex[key] = keyEventIndex[key] + 1;
 
 				wait(delay);
@@ -352,23 +389,17 @@ Cembalo {
 					key,
 					pan,
 					rate: rate,
-					newTimbre: timbre,
-					attack: newAttack,
-					release: newRelease,
-					out: newOut,
-					bodyindex: newBodyindex
+					timbre: timbre,
+					attack: attack,
+					release: release,
+					out: out,
+					bodyindex: bodyindex
 				);
 				
-				wait(localBendDelay - delay);
+				wait(dur - delay);
 
 				if(keyEventIndex[key] - 1 == localIndex, {
-					this.bendKey(key, bendAm)
-				});
-				
-				wait(dur - delay - localBendDelay);
-
-				if(keyEventIndex[key] - 1 == localIndex, {
-					this.keyOff(key, out: newOut)
+					this.keyOff(key, out: out, rate: rate, release: release)
 				})
 			}
 		}, {
@@ -385,8 +416,6 @@ Cembalo {
 		, timbre
 		, strum = 0
 		, randomStrum = false
-		, bendDelay = 0
-		, bendAm = 1
 		, attack
 		, release
 		, out
@@ -410,31 +439,24 @@ Cembalo {
 		pan = pan.asArray;
 		dur = dur.asArray;
 
-		if(attack.notNil, {
-			attack = attack.asArray
-		}, {
-			attack = [nil]
-		});
-
-		if(release.notNil, {
-			release = release.asArray
-		}, {
-			release = [nil]
-		});
+		timbre = timbre ? gTimbre;
+		attack = attack.asArray ? gAttack.asArray;
+		release = release.asArray ? gRelease.asArray;
+		out = out ? key.collect{|i| outputmapping.wrapAt(i)};
+		bodyindex = bodyindex ? gBodyindex;
 
 		key.do{|item, index|
+			"Playing key %\n".postf(item);
 			this.makeKeyEvent(
 				item,
-				dur[index % dur.size],
-				delay[index],
-				pan[index % pan.size],
+				dur.clipAt(index),
+				delay.clipAt(index),
+				pan.clipAt(index),
 				timbre: timbre,
-				bendDelay: bendDelay,
-				bendAm: bendAm,
-				newAttack: attack[index % dur.size],
-				newRelease: release[index % dur.size],
-				newOut: out,
-				newBodyindex: bodyindex
+				attack: attack.clipAt(index),
+				release: release.clipAt(index),
+				out: out,
+				bodyindex: bodyindex
 			)
 		}
 	}
@@ -447,8 +469,6 @@ Cembalo {
 		, timbre
 		, strum = 0
 		, randomStrum = false
-		, bendDelay = 1
-		, bendAm = 1
 		, attack
 		, release
 		, out
@@ -465,10 +485,12 @@ Cembalo {
 		rate = [];						// one array for rates
 
 		freq.asArray.do{|item, index|
+			var asMIDI, midiNN;
+			item = item * (440 / rootFreq);
 			// convert the frequency value to midi (with decimals)
-			var asMIDI = item.cpsmidi;
+ 			asMIDI = item.cpsmidi;
 			// convert the midi value to integer, i.e actual midi note numbers
-			var midiNN = asMIDI.floor.asInteger.clip(0,127);
+			midiNN = asMIDI.floor.asInteger.clip(0,127);
 			// find the closest sample that can be used
 			midiNN = this.findClosestSample(midiNN);
 			// add the key index to the list of keys
@@ -488,12 +510,10 @@ Cembalo {
 		pan = pan.asArray;
 		dur = dur.asArray;
 
-		if(attack.notNil, {
-			attack = attack.asArray
-		}, {
-			attack = [nil]
-		});
-
+		attack = attack.asArray ? gAttack.asArray;
+		release = release.asArray ? gRelease.asArray;
+		out = out.asArray ? key.collect{|i| outputmapping.wrapAt(i)};
+		
 		if(release.notNil, {
 			release = release.asArray
 		}, {
@@ -503,20 +523,18 @@ Cembalo {
 		key.do{|item, index|
 			this.makeKeyEvent(
 				item,
-				dur[index % dur.size],
-				delay[index],
-				pan[index % pan.size],
+				dur.clipAt(index),
+				delay.clipAt(index),
+				pan.clipAt(index),
 				rate[index],
 				timbre: timbre,
-				bendDelay: bendDelay,
-				bendAm: bendAm,
-				newAttack: attack[index % dur.size],
-				newRelease: release[index % dur.size],
-				newOut: out,
-				newBodyindex: bodyindex
+				attack: attack.clipAt(index),
+				release: release.clipAt(index),
+				out: out.clipAt(index),
+				bodyindex: bodyindex
 				
 			)
-		}
+		};
 	}
 	// *** Instance method: printChord
 	printChord {
@@ -671,8 +689,8 @@ Cembalo {
 		}
 	}
 
-	// *** Instance method: root_
-	root_{|newRoot|
+	// *** Instance method: setRoot
+	setRoot {|newRoot|
 
 		// "root" in this case means a MIDI note number, i.e
 		// specifying what is considered to be 1/1 when generating a
@@ -683,47 +701,47 @@ Cembalo {
 		this.tuningSetup(tuning)
 	}
 
-	// *** Instance method: bodyindex_
-	bodyindex_{|newBodyIndex|
-		bodyindex = newBodyIndex.asInteger;
+	// *** Instance method: setBodyindex
+	setBodyindex {|bodyindex|
+		gBodyindex = bodyindex.asInteger;
 		keys.do{|key|
 			if(key.notNil, {
-				key.bodyindex_(bodyindex)
+				key.setBodyindex(gBodyindex)
 			})
 		};
 	}
 
-	// *** Instance method: timbre_
-	timbre_{|newTimbre|
-		timbre = newTimbre
+	// *** Instance method: setTimbre
+	setTimbre {|timbre|
+		gTimbre = timbre
 	}
 
-	// *** Instance method: amp_
-	amp_{|newAmp|
-		amp = newAmp;
+	// *** Instance method: setAmp
+	setAmp {|amp|
+		gAmp = amp;
 		keys.do{|item|
 			if(item.notNil, {
-				item.amp_(amp)
+				item.setAmp(gAmp)
 			})
 		};
 	}
 
-	/// *** Instance method: attack_
-	attack_{|val|
-		attack = val;
+	/// *** Instance method: setAttack
+	setAttack {|attack|
+		gAttack = attack;
 		keys.do{|item|
 			if(item.notNil, {
-				item.attack_(attack)
+				item.setAttack(gAttack)
 			})
 		}
 	}
 
-	// *** Instance method: release_
-	release_{|val|
-		release = val;
+	// *** Instance method: setRelease
+	setRelease {|release|
+		gRelease = release;
 		keys.do{|item|
 			if(item.notNil, {
-				item.release_(release)
+				item.setRelease(gRelease)
 			})
 		}
 	}
@@ -759,8 +777,8 @@ Cembalo {
 		^newArray
 	}
 
-	// *** Instance method: outputmapping_
-	outputmapping_ {|array|
+	// *** Instance method: setOutputmapping
+	setOutputmapping {|array|
 		outputmapping = this.outputMappingSetup(array);
 
 		buffers.do{|item|
@@ -790,8 +808,6 @@ Cembalo {
 					pan: ~pan,
 					timbre: ~timbre,
 					randomStrum: ~randomStrum,
-					bendDelay: ~bendDelay,
-					bendAm: ~bendAm,
 					attack: ~attack,
 					release: ~release,
 					out: ~out,
@@ -803,8 +819,6 @@ Cembalo {
 		}, (
 			randomStrum: false,
 			timbre: 0,
-			bendDelay: 1,
-			bendAm: 1,
 			attack: 0,
 			release: 0,
 			out: nil,
@@ -822,8 +836,6 @@ Cembalo {
 					pan: ~pan,
 					timbre: ~timbre,
 					randomStrum: ~randomStrum,
-					bendDelay: ~bendDelay,
-					bendAm: ~bendAm,
 					attack: ~attack,
 					release: ~release,
 					out: ~out,
@@ -835,8 +847,6 @@ Cembalo {
 		}, (
 			randomStrum: false,
 			timbre: 0,
-			bendDelay: 1,
-			bendAm: 1,
 			attack: 0,
 			release: 0,
 			out: nil,
@@ -845,15 +855,45 @@ Cembalo {
 		"Done.".postln;
 	}
 
-	// *** Instance method: generateFifthBasedScale
-	generateFifthBasedScale {|fractionOfComma=0|
-		var comma = 81/80;
+	// *** Instance method: generateValotti
+	generateValotti {
+		var scale = [1];
+		var comma = (3/2).pow(12) / 2.pow(7);
 
-		^this.generateScale(1.5 / comma.pow(fractionOfComma));
+		// First, add the notes C-B (all 1/6 comma fifths)(
+		5.do{
+			var fifth = 1.5 / comma.pow(1/6);
+			scale = scale.add(scale[scale.size - 1] * fifth);
+		};
+
+		// Then, add the notes F# - F (all pure fifths)
+		6.do{
+			var fifth = 1.5;
+			scale = scale.add(scale[scale.size - 1] * fifth)
+		};
+
+		// Force the intervals into one octave:
+		scale = scale.collect{|ratio|
+			while({ratio > 2}, {
+				ratio = ratio / 2
+			});
+			ratio
+		};
+
+		scale = scale.sort;
+
+		^scale
 	}
 
-	// *** Instance method: generateScale
-	generateScale {|fifth=1.5|
+	// *** Instance method: generateMeantoneTemperament
+	generateMeantoneTemperament {|fractionOfComma=0|
+		var comma = 81/80;
+
+		^this.generateFifthBasedScale(1.5 / comma.pow(fractionOfComma));
+	}
+
+	// *** Instance method: generateFifthBasedScale
+	generateFifthBasedScale {|fifth=1.5|
 		var scale = [1];
 		var i = 0;
 		
@@ -911,20 +951,31 @@ Cembalo {
 
 	// *** Instance method: adjustSampleOffset
 	adjustSampleOffset {
+		// Hitta bråket för tonen A i den nuvarande stämningen
 		var ratio = this.tuningAsArray()[9];
+		// Hitta frekvensen av konsertstämt C genom att dividera 440
+		// Hz med avståndet mellan C och A i et12
 		var concertC = 440 / 9.midiratio;
 		var diff, sampleOffset;
 		var oldOffset;
 
-		"Adjusting sample offset using A=%...\n".postf(rootFreq);
-						
+		// Dividera den önskade grundfrekvensen med bråket för tonen A
+		// för att finna vad tonen C har för frekvens i den nuvarande
+		// stämningen, och dividera det med det konsertstämda C för
+		// att få ett flyttal som symboliserar avvikelsen mellan C i
+		// et12 i A=440 Hz och C i den givna stämningen i A=rootFreq
+		// Hz
 		masterRate = (rootFreq / ratio) / concertC;
 
+		// Räkna ut denna differans i MIDI genom att köra .ratiomidi
 		diff = masterRate.ratiomidi;
+
+		// Runda av detta tal för att hitta en sampleOffset, så att vi
+		// till slut använer rätt sampling för rätt ton
 		sampleOffset = diff.floor.asInteger;
 
 		masterRate = (diff - sampleOffset).midiratio;
-
+		
 		oldOffset = bufferIndexOffset;
 
 		bufferIndexOffset = sampleOffset;
@@ -944,8 +995,8 @@ Cembalo {
 		});
 	}
 	
-	// *** Instance method: tuning_
-	tuning_{|newTuning, rootFreq, rootFreqIndex|
+	// *** Instance method: setTuning
+	setTuning {|newTuning, rootFreq, rootFreqIndex|
 		tuning = newTuning;
 		this.tuningSetup(tuning);
 		if(rootFreq.notNil, {
@@ -985,29 +1036,30 @@ Cembalo {
 
 		}, {
 			if(newTuning.isNumber, {
-				var scale = this.generateFifthBasedScale(newTuning);
+				var scale = this.generateMeantoneTemperament(newTuning);
 				this.tuningSetup(scale);
 			}, {
 				switch(newTuning,
 					'et12', {
 						var scale = 12.collect{|i|
-							2.pow(i / 12)
+							//2.pow(i / 12)
+							i.midiratio
 						};
 						"Loading 12-tone equal temperament tuning...".postln;
 						this.tuningSetup(scale);
 					},
 					'mean', {
-						var scale = this.generateFifthBasedScale(1/4);
+						var scale = this.generateMeantoneTemperament(1/4);
 						"Loading quarter-comma meantone tuning...".postln;
 						this.tuningSetup(scale);
 					},
 					'mean6', {
-						var scale = this.generateFifthBasedScale(1/6);
+						var scale = this.generateMeantoneTemperament(1/6);
 						"Loading sixth-comma meantone tuning...".postln;
 						this.tuningSetup(scale);
 					},
 					'pyth', {
-						var scale = this.generateFifthBasedScale(0);
+						var scale = this.generateMeantoneTemperament(0);
 						"Loading pythagorean tuning...".postln;
 						this.tuningSetup(scale)
 					},
@@ -1061,6 +1113,11 @@ Cembalo {
 							16/9,
 							(128/81) * 2.pow(1/4)
 						])
+					},
+					'valotti', {
+						var scale = this.generateValotti();
+						"Loading Valotti Well Temperament...".postln;
+						this.tuningSetup(scale);
 					},
 					{
 						"Tuning % not found! Using default et12.\n".postf(newTuning);
@@ -1177,7 +1234,7 @@ Cembalo {
 			sig = Balance2.ar(sig[0], sig[1], pan);
 			sig = HPF.ar(sig, hpfCutoff);
 
-			sig = sig * amp;
+			sig = sig * amp.lag();
 
 			Out.ar(outL, sig[0]);
 			Out.ar(outR, sig[1])
@@ -1197,7 +1254,7 @@ Cembalo {
 			var sig = PlayBuf.ar(2, buf, rate, doneAction:2);
 			sig = Balance2.ar(sig[0], sig[1], pan);
 			sig = HPF.ar(sig, hpfCutoff);
-			sig = sig * amp;
+			sig = sig * amp.lag();
 
 			Out.ar(outL, sig[0]);
 			Out.ar(outR, sig[1]);
@@ -1225,7 +1282,7 @@ Cembalo {
 			sig = Pan2.ar(sig, pan);
 
 
-			sig = sig * amp;
+			sig = sig * amp.lag();
 
 			Out.ar(outL, sig[0]);
 			Out.ar(outR, sig[1])
@@ -1245,7 +1302,7 @@ Cembalo {
 			var sig = PlayBuf.ar(1, buf, rate, doneAction:2);
 			sig = HPF.ar(sig, hpfCutoff);
 			sig = Pan2.ar(sig, pan);
-			sig = sig * amp;
+			sig = sig * amp.lag();
 
 			Out.ar(outL, sig[0]);
 			Out.ar(outR, sig[1]);
@@ -1271,7 +1328,7 @@ Cembalo {
 			sig = Mix(sig);
 			sig = HPF.ar(sig, hpfCutoff);
 
-			sig = sig * amp;
+			sig = sig * amp.lag();
 
 			Out.ar(out, sig)
 		}).add;
@@ -1291,7 +1348,7 @@ Cembalo {
 			sig = Mix(sig);
 			sig = HPF.ar(sig, hpfCutoff);
 			
-			sig = sig * amp;
+			sig = sig * amp.lag();
 
 			Out.ar(out, sig)
 		}).add;
@@ -1313,7 +1370,7 @@ Cembalo {
 			var env = EnvGen.kr(Env.asr(atk,1,rel), gate, doneAction:2);
 			var sig = PlayBuf.ar(1, buf, rate.lag(lagTime) * BufRateScale.kr(buf)) * env;
 			sig = HPF.ar(sig, hpfCutoff);
-			sig = sig * amp;
+			sig = sig * amp.lag();
 
 			Out.ar(out, sig)
 		}).add;
@@ -1330,7 +1387,7 @@ Cembalo {
 
 			var sig = PlayBuf.ar(1, buf, rate, doneAction:2);
 			sig = HPF.ar(sig, hpfCutoff);
-			sig = sig * amp;
+			sig = sig * amp.lag();
 
 			Out.ar(out, sig)
 		}).add;
@@ -1412,6 +1469,17 @@ Cembalo {
 		};
 
 		^num;
+	}
+
+	// *** Instance method: free
+	free {
+		buffers.do{|buf|
+			if(buf[\release].notNil, {
+				buf[\release].free;
+			});
+
+			buf[\body].do(_.free);
+		};
 	}
 }
 // Local Variables:
