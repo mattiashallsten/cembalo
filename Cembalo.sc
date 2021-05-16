@@ -1,15 +1,15 @@
 Cembalo {
 	// Timbral parameters
-	var gTimbre = 0, gPan = 0, <gBodyindex = 0, <gAmp, gAttack, gRelease, lagTime;
+	var gTimbre = 0, gPan = 0, <gBodyindex = 0, <gAmp = 0.7, gAttack = 0, gRelease = 0, lagTime = 0.1;
 	var <gOut, <outputmapping;
 
 	// System variables
-	var server, path, userSamplePath, fillLostSamples, configurationPath, <configuration;
+	var server, path, userSamplePath, fillLostSamples, <configurationPath, <configuration;
 	var buffersOnServer;
 	var <bodySynthdef, <releaseSynthdef, <bodySynthdefMono, <releaseSynthdefMono;
 
 	// Tuning variables
-	var <tuning, <root, <rootFreq;
+	var <tuning, <scaleRoot = 0, <rootFreq = 440;
 	var rates, masterRate, <transposedRates, <tuningType, bufferIndexOffset = 0;
 	var <midiNoteOffset = 24, <midiNoteCeil;
 
@@ -23,8 +23,10 @@ Cembalo {
 
 	// *** Class method: new
 	*new {
-		| out = 0
-		, tuning = \et12
+		| tuning = \et12
+		, scaleRoot = 0
+		, rootFreq = 440
+		, rootFreqIndex = 9
 		, amp = 0.7
 		, outputmapping = 0
 		, mixToMono = false
@@ -34,8 +36,10 @@ Cembalo {
 		|
 		
 		^super.new.initCembalo(
-			out,
 			tuning,
+			scaleRoot,
+			rootFreq,
+			rootFreqIndex,
 			amp,
 			outputmapping,
 			mixToMono,
@@ -47,46 +51,34 @@ Cembalo {
 
 	// *** Instance method: initCembalo
 	initCembalo {
-		| out
-		, iTuning
+		| tuning
+		, scaleRoot
+		, rootFreq
+		, rootFreqIndex
 		, amp
-		, iOutputmapping
+		, outputmapping
 		, mixToMono
-		, iUserSamplePath
+		, userSamplePath
 		, fillLostSamples
 		, onLoad
 		|
-		"            =============".postln;
-		"            == Cembalo ==".postln;
-		"            =============".postln;
-		gOut = out;
-		tuning = iTuning;
-		root = 0;
-		rootFreq = 440;
-		gAmp = amp;
-		outputmapping = iOutputmapping;
-		userSamplePath = iUserSamplePath;
 
-		if(userSamplePath.notNil, {
-			if(userSamplePath[userSamplePath.size - 1] != "/", {
-				userSamplePath = userSamplePath ++ "/"
-			});
-		});
-		
-		//fillLostSamples = iFillLostSamples;
-		gAttack = 0;
-		gRelease = 0;
-		lagTime = 0.1;	
-		
 		server = Server.local;
 		path = Platform.userExtensionDir ++ "/cembalo/";
 
-		rates = 1!12;
-		masterRate = 1;
+		// Initialize keys array
+		keys = nil!128;
+		keyEventIndex = 0!128;
+		currentChord = 0!128;
 
-		outputmapping = this.outputMappingSetup(outputmapping);
-
+		// Initialize buffers dictionary
 		buffers = Dictionary();
+
+		// Set output mapping
+		this.setOutputmapping(outputmapping);
+
+		// Load configuration
+		this.loadConfiguration(userSamplePath);
 
 		if(mixToMono, {
 			bodySynthdef = \cembalo_player_mix_to_mono;
@@ -100,24 +92,14 @@ Cembalo {
 			releaseSynthdefMono = \cembalo_player_oneshot_mono_to_stereo;
 		});
 
-		// Initialize scaleType variable -- will be set in tuningSetup
-		"Setting up tuning...".postln;
-		this.setTuning(iTuning, rootFreq, 9);
-		"Done.".postln;
+		server.waitForBoot({
+			"Loading Synthdefs...".postln;
+			this.loadSynthDefs();
+			server.sync;
+			"Done.".postln;
 
-		keys = nil!128;
-		keyEventIndex = 0!128;
-		currentChord = 0!128;
-
-		"Loading configuration file...".postln;
-		this.loadConfiguration;
-		"Done.".postln;
-
-		server.waitForBoot{
-			"Server booted.".postln;
-
+			"Checking if buffers are already loaded on server...".postln;
 			buffersOnServer = [];
-			"Running query on server, finding buffers that are already loaded...".postln;
 			// With help from David Granström
 			server.cachedBuffersDo{|buf|
 				buffersOnServer = buffersOnServer.add(buf)
@@ -125,50 +107,23 @@ Cembalo {
 			server.sync;
 			"Done.".postln;
 
-			"Loading synthdefs...".postln;
-			this.loadSynthDefs;
-			"Done".postln;
-
 			"Loading buffers...".postln;
-			this.loadBuffers;
+			this.loadBuffers(userSamplePath);
 			server.sync;
-			"Done".postln;
-			"Number of buffers: %\n".postf(this.getNumBuffers());
+			"Done.".postln;
 
-			this.adjustSampleOffset;
+			// "Applying configuration to buffers...".postln;
+			// buffers.do{|item|
+			// 	var num = item[\nn].asString;
 
-			// Apply configuration to cent offsets
-			buffers.do{|item|
-				var num = item[\nn].asString;
-
-				item[\centOffset] = configuration["keys"][num]["cent"].asFloat;
-			};
+			// 	item[\centOffset] = configuration["keys"][num]["cent"].asFloat;
+			// };
+			// server.sync;
+			// "Done.".postln;
 
 			"Loading keys...".postln;
-			buffers.do{|item|
-				var nn = item[\nn];
-
-				var output = outputmapping[nn%outputmapping.size];
-
-				keys[nn] = CembaloKey(
-					nn: nn,
-					out: output[0],
-					outL: output[0],
-					outR: output[1],
-					amp: gAmp,
-					pan: 0,
-					attack: gAttack,
-					release: gRelease,
-					lagTime: lagTime,
-					bodyBuffer: item[\body][gBodyindex],
-					releaseBuffer: item[\release],
-					bodyindex: gBodyindex,
-					parent: this.value()
-				)
-			};
-
+			this.loadKeys(buffers);
 			server.sync;
-
 			"Done.".postln;
 
 			if(fillLostSamples, {
@@ -200,15 +155,189 @@ Cembalo {
 				"Done".postln;
 			});
 
-			this.eventTypeSetup;
+			"Setting tuning...".postln;
+			this.setTuning(tuning, scaleRoot);
+			server.sync;
+			"Done.".postln;
+
+			"Setting root freq...".postln;
+			this.setRootFreq(rootFreq, rootFreqIndex);
+			server.sync;
+			"Done.".postln;
+
+			"Setting up event type...".postln;
+			this.eventTypeSetup();
+			server.sync;
+			"Done.".postln;
 
 			if(onLoad.class == Function, {
 				onLoad.value(this)
 			});
-			
-			"Cembalo loaded.".postln;
-		}
+		});
 	}
+	// initCembalo {
+	// 	| out
+	// 	, iTuning
+	// 	, amp
+	// 	, iOutputmapping
+	// 	, mixToMono
+	// 	, iUserSamplePath
+	// 	, fillLostSamples
+	// 	, onLoad
+	// 	|
+	// 	"            =============".postln;
+	// 	"            == Cembalo ==".postln;
+	// 	"            =============".postln;
+	// 	gOut = out;
+	// 	tuning = iTuning;
+	// 	root = 0;
+	// 	rootFreq = 440;
+	// 	gAmp = amp;
+	// 	outputmapping = iOutputmapping;
+	// 	userSamplePath = iUserSamplePath;
+
+	// 	if(userSamplePath.notNil, {
+	// 		if(userSamplePath[userSamplePath.size - 1] != "/", {
+	// 			userSamplePath = userSamplePath ++ "/"
+	// 		});
+	// 	});
+		
+	// 	//fillLostSamples = iFillLostSamples;
+	// 	gAttack = 0;
+	// 	gRelease = 0;
+	// 	lagTime = 0.1;	
+		
+	// 	server = Server.local;
+	// 	path = Platform.userExtensionDir ++ "/cembalo/";
+
+	// 	rates = 1!12;
+	// 	masterRate = 1;
+
+	// 	outputmapping = this.outputMappingSetup(outputmapping);
+
+	// 	buffers = Dictionary();
+
+	// 	if(mixToMono, {
+	// 		bodySynthdef = \cembalo_player_mix_to_mono;
+	// 		releaseSynthdef = \cembalo_player_oneshot_mix_to_mono;
+	// 		bodySynthdefMono = \cembalo_player_mono;
+	// 		releaseSynthdefMono = \cembalo_player_oneshot_mono;
+	// 	}, {
+	// 		bodySynthdef = \cembalo_player;
+	// 		releaseSynthdef = \cembalo_player_oneshot;
+	// 		bodySynthdefMono = \cembalo_player_mono_to_stereo;
+	// 		releaseSynthdefMono = \cembalo_player_oneshot_mono_to_stereo;
+	// 	});
+
+	// 	// Initialize scaleType variable -- will be set in tuningSetup
+	// 	"Setting up tuning...".postln;
+	// 	this.setTuning(iTuning, rootFreq, 9);
+	// 	"Done.".postln;
+
+	// 	keys = nil!128;
+	// 	keyEventIndex = 0!128;
+	// 	currentChord = 0!128;
+
+	// 	"Loading configuration file...".postln;
+	// 	this.loadConfiguration;
+	// 	"Done.".postln;
+
+	// 	server.waitForBoot{
+	// 		"Server booted.".postln;
+
+	// 		buffersOnServer = [];
+	// 		"Running query on server, finding buffers that are already loaded...".postln;
+	// 		// With help from David Granström
+	// 		server.cachedBuffersDo{|buf|
+	// 			buffersOnServer = buffersOnServer.add(buf)
+	// 		};
+	// 		server.sync;
+	// 		"Done.".postln;
+
+	// 		"Loading synthdefs...".postln;
+	// 		this.loadSynthDefs;
+	// 		"Done".postln;
+
+	// 		"Loading buffers...".postln;
+	// 		this.loadBuffers;
+	// 		server.sync;
+	// 		"Done".postln;
+	// 		"Number of buffers: %\n".postf(this.getNumBuffers());
+
+	// 		this.adjustSampleOffset;
+
+	// 		// Apply configuration to cent offsets
+	// 		buffers.do{|item|
+	// 			var num = item[\nn].asString;
+
+	// 			item[\centOffset] = configuration["keys"][num]["cent"].asFloat;
+	// 		};
+
+	// 		"Loading keys...".postln;
+	// 		buffers.do{|item|
+	// 			var nn = item[\nn];
+
+	// 			var output = outputmapping[nn%outputmapping.size];
+
+	// 			keys[nn] = CembaloKey(
+	// 				nn: nn,
+	// 				out: output[0],
+	// 				outL: output[0],
+	// 				outR: output[1],
+	// 				amp: gAmp,
+	// 				pan: 0,
+	// 				attack: gAttack,
+	// 				release: gRelease,
+	// 				lagTime: lagTime,
+	// 				bodyBuffer: item[\body][gBodyindex],
+	// 				releaseBuffer: item[\release],
+	// 				bodyindex: gBodyindex,
+	// 				parent: this.value()
+	// 			)
+	// 		};
+
+	// 		server.sync;
+
+	// 		"Done.".postln;
+
+	// 		if(fillLostSamples, {
+	// 			"Creating additional keys...".postln;
+	// 			(0..127).do{|nn|
+	// 				if(keys[nn] == nil, {
+	// 					var output = outputmapping[nn%outputmapping.size];
+	// 					var sampleindex = this.findClosestSample(nn);
+
+	// 					"creating new key with note number % using sample %\n".postf(
+	// 						nn, sampleindex);
+						
+	// 					keys[nn] = CembaloKey(
+	// 						nn: nn,
+	// 						out: output[0],
+	// 						outL: output[0],
+	// 						outR: output[1],
+	// 						amp: gAmp,
+	// 						pan: 0,
+	// 						attack: gAttack,
+	// 						release: gRelease,
+	// 						bodyBuffer: buffers[sampleindex][\body][gBodyindex],
+	// 						releaseBuffer: buffers[sampleindex][\release],
+	// 						parent: this.value()
+	// 					);
+	// 				})
+	// 			};
+	// 			server.sync;
+	// 			"Done".postln;
+	// 		});
+
+	// 		this.eventTypeSetup;
+
+	// 		if(onLoad.class == Function, {
+	// 			onLoad.value(this)
+	// 		});
+			
+	// 		"Cembalo loaded.".postln;
+	// 	}
+	// }
 
 	getMax {
 		var index = 127;
@@ -689,15 +818,15 @@ Cembalo {
 		}
 	}
 
-	// *** Instance method: setRoot
-	setRoot {|newRoot|
+	// *** Instance method: setScaleRoot
+	setScaleRoot {|newScaleRoot|
 
-		// "root" in this case means a MIDI note number, i.e
+		// "scaleRoot" in this case means a MIDI note number, i.e
 		// specifying what is considered to be 1/1 when generating a
 		// scale. It is /not/ the root frequency in hertz (i.e 440,
 		// 415 etc)
 		
-		root = newRoot % 12;
+		scaleRoot = newScaleRoot % 12;
 		this.tuningSetup(tuning)
 	}
 
@@ -719,31 +848,37 @@ Cembalo {
 	// *** Instance method: setAmp
 	setAmp {|amp|
 		gAmp = amp;
-		keys.do{|item|
-			if(item.notNil, {
-				item.setAmp(gAmp)
-			})
-		};
+		if(keys.notNil, {
+			keys.do{|item|
+				if(item.notNil, {
+					item.setAmp(gAmp)
+				})
+			};
+		});
 	}
 
 	/// *** Instance method: setAttack
 	setAttack {|attack|
 		gAttack = attack;
-		keys.do{|item|
-			if(item.notNil, {
-				item.setAttack(gAttack)
-			})
-		}
+		if(keys.notNil, {
+			keys.do{|item|
+				if(item.notNil, {
+					item.setAttack(gAttack)
+				})
+			}
+		});
 	}
 
 	// *** Instance method: setRelease
 	setRelease {|release|
 		gRelease = release;
-		keys.do{|item|
-			if(item.notNil, {
-				item.setRelease(gRelease)
-			})
-		}
+		if(keys.notNil, {
+			keys.do{|item|
+				if(item.notNil, {
+					item.setRelease(gRelease)
+				})
+			}
+		});
 	}
 
 	// *** Instance method: setSampleCentDeviation
@@ -781,24 +916,24 @@ Cembalo {
 	setOutputmapping {|array|
 		outputmapping = this.outputMappingSetup(array);
 
-		buffers.do{|item|
-			var nn = item[\nn];
+		if(buffers.notNil, {
+			buffers.do{|item|
+				var nn = item[\nn];
 
-			var output = outputmapping[nn%outputmapping.size];
+				var output = outputmapping[nn%outputmapping.size];
 
-			keys[nn].output_(output[0]);
-			keys[nn].outputL_(output[0]);
-			keys[nn].outputR_(output[1]);
-		};
-
-		"Output mapping:\n%\n".postf(outputmapping);
+				keys[nn].output_(output[0]);
+				keys[nn].outputL_(output[0]);
+				keys[nn].outputR_(output[1]);
+			};
+		});
 	}
 
 	// *** Instance method: eventTypeSetup
 	eventTypeSetup {
 		Event.removeEventType(\cembalo);
 		Event.removeEventType(\cembalomidi);
-		"Setting up regular event type...".postln;
+
 		Event.addEventType(\cembalo, {
 			if(~cembalo.notNil, {
 				~play = ~cembalo.playNote(
@@ -826,7 +961,6 @@ Cembalo {
 		));
 		"Done.".postln;
 
-		"Setting up midi event type...".postln;
 		Event.addEventType(\cembalomidi, {
 			if(~cembalo.notNil, {
 				~play = ~cembalo.playMIDINote(
@@ -852,7 +986,6 @@ Cembalo {
 			out: nil,
 			bodyindex: nil
 		));
-		"Done.".postln;
 	}
 
 	// *** Instance method: generateValotti
@@ -940,6 +1073,7 @@ Cembalo {
 	// *** Instance method: setRootFreq
 	setRootFreq {|hertz, index = 9|
 		var ratios, ratio;
+		"Setting root freq to %\n".postf(hertz);
 
 		index = index ? 9;
 		
@@ -996,9 +1130,14 @@ Cembalo {
 	}
 	
 	// *** Instance method: setTuning
-	setTuning {|newTuning, rootFreq, rootFreqIndex|
+	setTuning {|newTuning, scaleRoot, rootFreq, rootFreqIndex|
 		tuning = newTuning;
-		this.tuningSetup(tuning);
+		if(scaleRoot.notNil, {
+			this.setScaleRoot(scaleRoot)
+		}, {
+			this.tuningSetup(tuning);
+		});
+
 		if(rootFreq.notNil, {
 			this.setRootFreq(rootFreq, rootFreqIndex)
 		})
@@ -1009,7 +1148,7 @@ Cembalo {
 		tuning = newTuning;
 		if(newTuning.isArray, {
 			var len = newTuning.size;
-
+			
 			if(len < 12, {
 				var diff = 12 - len;
 				"not enough ratios: adding % 2".format(diff).postln;
@@ -1126,7 +1265,7 @@ Cembalo {
 				)
 			})
 		});
-		transposedRates = rates.rotate(root % 12);
+		transposedRates = rates.rotate(scaleRoot % 12);
 		this.adjustSampleOffset();
 	}
 
@@ -1394,8 +1533,9 @@ Cembalo {
 	}
 
 	// *** Instance method: loadConfiguration
-	loadConfiguration {
+	loadConfiguration {|userSamplePath|
 		if(userSamplePath.notNil, {
+			"Found configuration in supplied path!".postln;
 			configurationPath = userSamplePath ++ "info.json"
 		}, {
 			configurationPath = path ++ "samples/info.json"
@@ -1403,6 +1543,7 @@ Cembalo {
 
 		if(File.exists(configurationPath), {
 			var file = File.new(configurationPath, "r").readAllString;
+			"Found file in configuration path!".postln;
 			configuration = file.parseJSON;
 		}, {
 			var file;
@@ -1414,7 +1555,7 @@ Cembalo {
 	}
 
 	// *** Instance method: loadBuffers
-	loadBuffers {
+	loadBuffers {|userSamplePath|
 		var bodyPath, releasePath;
 
 		if(userSamplePath.notNil, {
@@ -1469,6 +1610,31 @@ Cembalo {
 		};
 
 		^num;
+	}
+
+	// *** Instance method: loadKeys
+	loadKeys {|buffers|
+		buffers.do{|item|
+			var nn = item[\nn];
+
+			var output = outputmapping[nn%outputmapping.size];
+
+			keys[nn] = CembaloKey(
+				nn: nn,
+				out: output[0],
+				outL: output[0],
+				outR: output[1],
+				amp: gAmp,
+				pan: 0,
+				attack: gAttack,
+				release: gRelease,
+				lagTime: lagTime,
+				bodyBuffer: item[\body][gBodyindex],
+				releaseBuffer: item[\release],
+				bodyindex: gBodyindex,
+				parent: this.value()
+			)
+		};
 	}
 
 	// *** Instance method: free
