@@ -54,12 +54,15 @@ CembaloKey {
 			outR = outL + 1
 		});
 		
-		rate = newRate ? rate;
+		newRate = newRate ? rate;
+
 		amp = newAmp ? amp;
 		pan = newPan ? pan;
+
 		newAttack = newAttack ? attack;
 		newRelease = newRelease ? release;
 		if(newRelease < 0.1, { newRelease = 0.1 });
+
 		newBodyindex = newBodyindex ? bodyindex;
 		newTimbre = newTimbre ? timbre;
 		
@@ -70,8 +73,7 @@ CembaloKey {
 		// make adjustments in playback rate (set value of compRate)
 		this.adjustRate(newTimbre);
 
-		freq = nn.midicps * rate * compRate;
-		"HPF Cutoff: %\n".postf((freq / 2).round(0.01));
+		freq = nn.midicps * newRate * compRate;
 		
 		if(bodyBuffer.numChannels == 2, {
 			player = Synth(parent.bodySynthdef, [
@@ -79,7 +81,7 @@ CembaloKey {
 				\out, out,
 				\outL, outL,
 				\outR, outR,
-				\rate, rate * bendAm * compRate,
+				\rate, newRate * bendAm * compRate,
 				\pan, pan,
 				\atk, newAttack,
 				\rel, newRelease,
@@ -93,7 +95,7 @@ CembaloKey {
 				\out, out,
 				\outL, outL,
 				\outR, outR,
-				\rate, rate * bendAm * compRate,
+				\rate, newRate * bendAm * compRate,
 				\pan, pan,
 				\atk, newAttack,
 				\rel, newRelease,
@@ -105,15 +107,17 @@ CembaloKey {
 			
 		
 		// playerTimer = fork { wait(bodyLength - 0.1); player.set(\gate, 0); player = nil };
+
 		
 		keyIsDepressed = true;
 	}
 	
 	// * Instance method: keyOff
-	keyOff {|newOut, newRelease|
+	keyOff {|newRate, newOut, newRelease|
 		var out, outL, outR;
 
 		newRelease = newRelease ? release;
+		newRate = newRate ? rate;
 
 		if(newOut.notNil, {
 			out = newOut;
@@ -140,7 +144,7 @@ CembaloKey {
 						\out, out,
 						\outL, outL,
 						\outR, outR,
-						\rate, rate * bendAm * compRate,
+						\rate, newRate * bendAm * compRate,
 						\pan, pan,
 						\amp, amp,
 						\hpfCutoff, freq / 2
@@ -151,7 +155,7 @@ CembaloKey {
 						\out, out,
 						\outL, outL,
 						\outR, outR,
-						\rate, rate * bendAm * compRate,
+						\rate, newRate * bendAm * compRate,
 						\pan, pan,
 						\amp, amp,
 						\hpfCutoff, freq / 2
@@ -218,14 +222,17 @@ CembaloKey {
 		rate = val;
 	}
 
-	// *** Instance method: bodyindex_
-	bodyindex_ {|val|
+	// *** Instance method: setBodyindex
+	setBodyindex {|val|
 		bodyindex = val
 	}
 
-	// *** Instance method: amp_
-	amp_ {|val|
-		amp = val
+	// *** Instance method: setAmp
+	setAmp {|val|
+		amp = val;
+		if(player.notNil, {
+			player.set(\amp, amp)
+		});
 	}
 
 	output_ {|val|
@@ -240,13 +247,13 @@ CembaloKey {
 		outputR = val.div(1);
 	}
 
-	// *** Instance method: attack_
-	attack_ {|val|
+	// *** Instance method: setAttack
+	setAttack {|val|
 		attack = val
 	}
 
-	// *** Instance method: release_
-	release_ {|val|
+	// *** Instance method: setRelease
+	setRelease {|val|
 		release = val
 	}
 }
