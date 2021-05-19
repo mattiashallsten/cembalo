@@ -54,7 +54,7 @@ CembaloKey {
 			outR = outL + 1
 		});
 		
-		newRate = newRate ? rate;
+		rate = newRate ? rate;
 
 		amp = newAmp ? amp;
 		pan = newPan ? pan;
@@ -73,15 +73,15 @@ CembaloKey {
 		// make adjustments in playback rate (set value of compRate)
 		this.adjustRate(newTimbre);
 
-		freq = nn.midicps * newRate * compRate;
-		
+		freq = nn.midicps * rate * compRate;
+
 		if(bodyBuffer.numChannels == 2, {
 			player = Synth(parent.bodySynthdef, [
 				\buf, bodyBuffer,
 				\out, out,
 				\outL, outL,
 				\outR, outR,
-				\rate, newRate * bendAm * compRate,
+				\rate, rate * bendAm * compRate,
 				\pan, pan,
 				\atk, newAttack,
 				\rel, newRelease,
@@ -95,7 +95,7 @@ CembaloKey {
 				\out, out,
 				\outL, outL,
 				\outR, outR,
-				\rate, newRate * bendAm * compRate,
+				\rate, rate * bendAm * compRate,
 				\pan, pan,
 				\atk, newAttack,
 				\rel, newRelease,
@@ -117,7 +117,7 @@ CembaloKey {
 		var out, outL, outR;
 
 		newRelease = newRelease ? release;
-		newRate = newRate ? rate;
+		rate = newRate ? rate;
 
 		if(newOut.notNil, {
 			out = newOut;
@@ -144,7 +144,7 @@ CembaloKey {
 						\out, out,
 						\outL, outL,
 						\outR, outR,
-						\rate, newRate * bendAm * compRate,
+						\rate, rate * bendAm * compRate,
 						\pan, pan,
 						\amp, amp,
 						\hpfCutoff, freq / 2
@@ -155,7 +155,7 @@ CembaloKey {
 						\out, out,
 						\outL, outL,
 						\outR, outR,
-						\rate, newRate * bendAm * compRate,
+						\rate, rate * bendAm * compRate,
 						\pan, pan,
 						\amp, amp,
 						\hpfCutoff, freq / 2
@@ -206,7 +206,7 @@ CembaloKey {
 		bendAm = val;
 		if(player.notNil, {
 			player.set(\rate, rate * bendAm * compRate)
-		})
+		});
 	}
 
 	// *** Instance method: setLagTime
