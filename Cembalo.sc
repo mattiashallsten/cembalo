@@ -852,6 +852,8 @@ Cembalo {
 		gTimbre = timbre
 	}
 
+	timbre_ {|val| this.setTimbre(val)}
+
 	// *** Instance method: setAmp
 	setAmp {|amp|
 		gAmp = amp;
@@ -863,6 +865,8 @@ Cembalo {
 			};
 		});
 	}
+
+	amp_ {|val| this.setAmp(val)}
 
 	/// *** Instance method: setAttack
 	setAttack {|attack|
@@ -876,6 +880,8 @@ Cembalo {
 		});
 	}
 
+	attack_ {|val| this.setAttack(val)}
+
 	// *** Instance method: setRelease
 	setRelease {|release|
 		gRelease = release;
@@ -887,6 +893,8 @@ Cembalo {
 			}
 		});
 	}
+
+	release_ {|val| this.setRelease(val)}
 
 	// *** Instance method: setSampleCentDeviation
 	setSampleCentOffset {|sample=60, val=0|
@@ -935,6 +943,8 @@ Cembalo {
 			};
 		});
 	}
+
+	outputmapping_ {|val| this.setOutputmapping(val)}
 
 	// *** Instance method: eventTypeSetup
 	eventTypeSetup {
@@ -1090,6 +1100,8 @@ Cembalo {
 		this.adjustSampleOffset;
 	}
 
+	rootFreq_ {|val| this.setRootFreq(val)}
+
 	// *** Instance method: adjustSampleOffset
 	adjustSampleOffset {
 		// Hitta bråket för tonen A i den nuvarande stämningen
@@ -1149,6 +1161,8 @@ Cembalo {
 			this.setRootFreq(rootFreq, rootFreqIndex)
 		})
 	}
+
+	tuning_ {|val| this.setTuning(val)}
 
 	// *** Instance method: tuningSetup
 	tuningSetup {|newTuning|
