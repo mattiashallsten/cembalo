@@ -32,6 +32,7 @@ Cembalo {
 		, mixToMono = false
 		, userSamplePath = nil
 		, fillLostSamples = false
+		, server = nil
 		, onLoad = nil
 		|
 		
@@ -45,6 +46,7 @@ Cembalo {
 			mixToMono,
 			userSamplePath,
 			fillLostSamples,
+			server,
 			onLoad
 		);
 	}
@@ -60,10 +62,11 @@ Cembalo {
 		, mixToMono
 		, userSamplePath
 		, fillLostSamples
+		, srv
 		, onLoad
 		|
 
-		server = Server.local;
+		server = srv ? Server.local;
 		path = Platform.userExtensionDir ++ "/cembalo/";
 
 		// Initialize keys array
@@ -173,6 +176,10 @@ Cembalo {
 			if(onLoad.class == Function, {
 				onLoad.value(this)
 			});
+
+			server.sync;
+
+			"=== CEMBALO LOADED ===".postln;
 		});
 	}
 	// initCembalo {
